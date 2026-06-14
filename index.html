@@ -1644,6 +1644,101 @@ body::before {
   color: #ee4d2d;
 }
 
+/* --- Floating Checkout --- */
+.floating-checkout {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 400px;
+  background: var(--accent-gradient);
+  color: #000;
+  border-radius: var(--radius-full);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  cursor: pointer;
+  z-index: 100;
+  transition: all var(--transition-slow);
+  animation: slideUp 0.3s ease;
+}
+
+.floating-checkout.hidden {
+  display: none;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translate(-50%, 40px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.floating-checkout:hover {
+  transform: translate(-50%, -2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 30px var(--accent-glow);
+}
+
+.floating-checkout:active {
+  transform: translate(-50%, 2px);
+}
+
+.floating-checkout .fc-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.floating-checkout .fc-qty {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.floating-checkout .fc-total {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.floating-checkout .fc-action {
+  font-weight: 800;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* --- Cash Input Modal --- */
+.quick-cash-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.quick-cash-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.quick-cash-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.change-display {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-top: 12px;
+}
+
 /* --- Responsive --- */
 @media (max-width: 1024px) {
   .kasir-layout {
@@ -1831,10 +1926,8 @@ body::before {
             <span class="cart-total-label">TOTAL</span>
             <span class="cart-total-amount" id="cart-total">Rp 0</span>
           </div>
-          <div class="cart-actions">
-            <button class="btn btn-primary" id="btn-pay" onclick="startPaymentProcess()" disabled>
-              💰 Bayar
-            </button>
+          <div class="cart-actions" style="display:none;">
+            <!-- Old pay button hidden -->
           </div>
         </div>
       </div>
@@ -1960,6 +2053,17 @@ body::before {
   <div class="success-icon-big">✅</div>
   <div class="success-text">Transaksi Berhasil!</div>
   <div class="success-amount" id="success-amount">Rp 0</div>
+</div>
+
+<!-- ===== FLOATING CHECKOUT ===== -->
+<div class="floating-checkout hidden" id="floating-checkout" onclick="startPaymentProcess()">
+  <div class="fc-info">
+    <div class="fc-qty" id="fc-qty">0 Item</div>
+    <div class="fc-total" id="fc-total">Rp 0</div>
+  </div>
+  <div class="fc-action">
+    Bayar ➔
+  </div>
 </div>
 
 <script>
@@ -2149,10 +2253,16 @@ function getCartTotal() {
   }, 0);
 }
 
+function getCartQty() {
+  return state.cart.reduce((sum, c) => sum + c.qty, 0);
+}
+
 function renderCart() {
   const container = document.getElementById('cart-items');
   const totalEl = document.getElementById('cart-total');
-  const payBtn = document.getElementById('btn-pay');
+  const floating = document.getElementById('floating-checkout');
+  const fcQty = document.getElementById('fc-qty');
+  const fcTotal = document.getElementById('fc-total');
 
   if (state.cart.length === 0) {
     container.innerHTML = `
@@ -2162,7 +2272,7 @@ function renderCart() {
         <p style="font-size:0.75rem;margin-top:4px;">Klik menu untuk menambahkan</p>
       </div>`;
     totalEl.textContent = formatRupiah(0);
-    payBtn.disabled = true;
+    floating.classList.add('hidden');
     return;
   }
 
@@ -2189,9 +2299,26 @@ function renderCart() {
       </div>`;
   }).join('');
 
-  totalEl.textContent = formatRupiah(getCartTotal());
-  payBtn.disabled = false;
+  const total = getCartTotal();
+  const qty = getCartQty();
+
+  totalEl.textContent = formatRupiah(total);
+  
+  if (state.activePage === 'kasir') {
+    floating.classList.remove('hidden');
+    fcQty.textContent = `${qty} Item`;
+    fcTotal.textContent = formatRupiah(total);
+  } else {
+    floating.classList.add('hidden');
+  }
 }
+
+// Ensure floating checkout hides when changing pages
+const originalSwitchPage = switchPage;
+switchPage = function(page) {
+  originalSwitchPage(page);
+  renderCart(); // Re-evaluate floating checkout visibility
+};
 
 // --- Transaction Flow ---
 let pendingTxn = {};
@@ -2244,6 +2371,82 @@ function selectPayment(method) {
 
 function selectOrderType(type) {
   pendingTxn.orderType = type;
+  
+  if (pendingTxn.paymentMethod === 'Tunai') {
+    showCashInputModal();
+  } else {
+    closeModal();
+    finalizePayment();
+  }
+}
+
+function showCashInputModal() {
+  const total = getCartTotal();
+  const modal = document.getElementById('modal-overlay');
+  document.getElementById('modal-title').textContent = 'Masukkan Uang Pembeli';
+  
+  // Calculate quick cash amounts
+  let quickAmounts = [total]; // Uang Pas
+  const baseAmounts = [20000, 50000, 100000];
+  baseAmounts.forEach(amt => {
+    if (amt > total) quickAmounts.push(amt);
+  });
+  // If we don't have 4, add next thousands
+  let nextThousand = Math.ceil(total / 10000) * 10000;
+  if (nextThousand > total && !quickAmounts.includes(nextThousand)) quickAmounts.push(nextThousand);
+  
+  document.getElementById('modal-body').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px;">
+      Total Tagihan<br>
+      <strong style="color:var(--accent-primary);font-size:1.4rem;">${formatRupiah(total)}</strong>
+    </div>
+    <div class="form-group">
+      <input type="number" class="form-input" id="input-cash-amount" placeholder="Nominal Uang (Rp)" oninput="updateChangeDisplay()" style="font-size:1.2rem;text-align:center;padding:16px;">
+    </div>
+    <div class="quick-cash-grid">
+      <button class="quick-cash-btn" onclick="setCashAmount(${quickAmounts[0]})">Uang Pas</button>
+      ${quickAmounts.slice(1,4).map(amt => `<button class="quick-cash-btn" onclick="setCashAmount(${amt})">${formatRupiah(amt)}</button>`).join('')}
+    </div>
+    <div style="text-align:center;margin-top:20px;">
+      <div class="change-display" id="change-display">Kembalian: Rp 0</div>
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">Batal</button>
+    <button class="btn btn-primary" onclick="processCashPayment()">✅ Proses Pembayaran</button>
+  `;
+}
+
+function setCashAmount(amount) {
+  document.getElementById('input-cash-amount').value = amount;
+  updateChangeDisplay();
+}
+
+function updateChangeDisplay() {
+  const total = getCartTotal();
+  const cash = parseInt(document.getElementById('input-cash-amount').value) || 0;
+  const changeDisplay = document.getElementById('change-display');
+  
+  if (cash < total) {
+    changeDisplay.textContent = 'Uang Kurang!';
+    changeDisplay.style.color = 'var(--danger)';
+  } else {
+    changeDisplay.textContent = 'Kembalian: ' + formatRupiah(cash - total);
+    changeDisplay.style.color = 'var(--success)';
+  }
+}
+
+function processCashPayment() {
+  const total = getCartTotal();
+  const cash = parseInt(document.getElementById('input-cash-amount').value) || 0;
+  
+  if (cash < total) {
+    alert('Uang pelanggan kurang dari total tagihan!');
+    return;
+  }
+  
+  pendingTxn.cash = cash;
+  pendingTxn.change = cash - total;
   closeModal();
   finalizePayment();
 }
@@ -2254,6 +2457,8 @@ function finalizePayment() {
     date: new Date().toISOString(),
     paymentMethod: pendingTxn.paymentMethod,
     orderType: pendingTxn.orderType,
+    cash: pendingTxn.cash || 0,
+    change: pendingTxn.change || 0,
     items: state.cart.map(c => {
       const item = state.menu.find(m => m.id === c.menuId);
       return {
@@ -2271,21 +2476,24 @@ function finalizePayment() {
   saveData();
 
   // Show success
-  showSuccess(txn.total);
+  showSuccess(txn.total, pendingTxn.change);
 
   // Clear cart
   state.cart = [];
   renderCart();
 }
 
-function showSuccess(amount) {
+function showSuccess(amount, changeAmount = 0) {
   const overlay = document.getElementById('success-overlay');
-  document.getElementById('success-amount').textContent = formatRupiah(amount);
+  document.getElementById('success-amount').innerHTML = `
+    ${formatRupiah(amount)}
+    ${changeAmount > 0 ? `<div style="font-size:1rem;color:var(--success);font-weight:600;margin-top:12px;">Kembalian: ${formatRupiah(changeAmount)}</div>` : ''}
+  `;
   overlay.classList.remove('hidden');
 
   setTimeout(() => {
     overlay.classList.add('hidden');
-  }, 1800);
+  }, 2500);
 }
 
 // --- History ---
@@ -2350,6 +2558,16 @@ function showTxnDetail(txnId) {
     <div class="txn-detail-total" style="border-top:none;padding-top:8px;margin-top:0;">
       <span style="font-size:0.8rem;color:var(--text-muted);font-weight:500;">Metode Bayar: ${txn.paymentMethod === 'ShopeePay' ? '<span style="color:#ee4d2d">ShopeePay</span>' : '<span style="color:var(--success)">Tunai</span>'}</span>
     </div>
+    ${txn.paymentMethod === 'Tunai' ? `
+    <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text-muted);margin-top:4px;">
+      <span>Uang Tunai:</span>
+      <span>${formatRupiah(txn.cash)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--success);font-weight:600;margin-top:2px;">
+      <span>Kembalian:</span>
+      <span>${formatRupiah(txn.change)}</span>
+    </div>
+    ` : ''}
     <div class="txn-detail-total">
       <span>TOTAL</span>
       <span class="amount">${formatRupiah(txn.total)}</span>

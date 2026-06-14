@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -1592,6 +1592,58 @@ body::before {
   color: var(--text-muted);
 }
 
+/* --- Payment & Order Type Selection Cards --- */
+.selection-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.selection-card {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.selection-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-active);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.selection-card:active {
+  transform: scale(0.97);
+}
+
+.selection-card .sc-icon {
+  font-size: 2.5rem;
+  margin-bottom: 4px;
+}
+
+.selection-card .sc-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.selection-card.shopeepay {
+  color: #ee4d2d;
+}
+
+.selection-card.shopeepay .sc-title {
+  color: #ee4d2d;
+}
+
 /* --- Responsive --- */
 @media (max-width: 1024px) {
   .kasir-layout {
@@ -1780,8 +1832,8 @@ body::before {
             <span class="cart-total-amount" id="cart-total">Rp 0</span>
           </div>
           <div class="cart-actions">
-            <button class="btn btn-primary" id="btn-pay" onclick="processPayment()" disabled>
-              💰 Bayar & Simpan
+            <button class="btn btn-primary" id="btn-pay" onclick="startPaymentProcess()" disabled>
+              💰 Bayar
             </button>
           </div>
         </div>
@@ -2015,9 +2067,13 @@ function renderMenuGrid() {
 
   grid.innerHTML = filtered.map(item => `
     <div class="menu-item" onclick="addToCart(${item.id})" id="menu-${item.id}">
-      <span class="item-emoji">${item.emoji}</span>
-      <div class="item-name">${item.name}</div>
-      <div class="item-price">${formatRupiah(item.price)}</div>
+      <div class="item-img-wrap">
+        ${item.image ? `<img src="${item.image}" class="item-img">` : `<div class="item-placeholder">${item.emoji || '🍽️'}</div>`}
+      </div>
+      <div class="item-details">
+        <div class="item-name">${item.name}</div>
+        <div class="item-price">${formatRupiah(item.price)}</div>
+      </div>
     </div>
   `).join('');
 }
@@ -2116,7 +2172,9 @@ function renderCart() {
     const subtotal = item.price * c.qty;
     return `
       <div class="cart-item">
-        <span class="ci-emoji">${item.emoji}</span>
+        <div class="ci-thumb">
+          ${item.image ? `<img src="${item.image}">` : `<div class="ci-thumb-placeholder">${item.emoji || '🍽️'}</div>`}
+        </div>
         <div class="ci-info">
           <div class="ci-name">${item.name}</div>
           <div class="ci-price">${formatRupiah(item.price)}</div>
@@ -2135,18 +2193,72 @@ function renderCart() {
   payBtn.disabled = false;
 }
 
-// --- Transaction ---
-function processPayment() {
-  if (state.cart.length === 0) return;
+// --- Transaction Flow ---
+let pendingTxn = {};
 
+function startPaymentProcess() {
+  if (state.cart.length === 0) return;
+  pendingTxn = {};
+
+  const modal = document.getElementById('modal-overlay');
+  document.getElementById('modal-title').textContent = 'Pilih Metode Pembayaran';
+  document.getElementById('modal-body').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px;font-size:0.9rem;color:var(--text-muted);">
+      Total tagihan: <strong style="color:var(--accent-primary);font-size:1.2rem;">${formatRupiah(getCartTotal())}</strong>
+    </div>
+    <div class="selection-grid">
+      <div class="selection-card" onclick="selectPayment('Tunai')">
+        <span class="sc-icon">💵</span>
+        <span class="sc-title">Tunai</span>
+      </div>
+      <div class="selection-card shopeepay" onclick="selectPayment('ShopeePay')">
+        <span class="sc-icon">📱</span>
+        <span class="sc-title">ShopeePay</span>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">Batal</button>
+  `;
+  modal.classList.remove('hidden');
+}
+
+function selectPayment(method) {
+  pendingTxn.paymentMethod = method;
+
+  const modal = document.getElementById('modal-overlay');
+  document.getElementById('modal-title').textContent = 'Pilih Jenis Pesanan';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="selection-grid">
+      <div class="selection-card" onclick="selectOrderType('Makan Disini')">
+        <span class="sc-icon">🍽️</span>
+        <span class="sc-title">Makan Disini</span>
+      </div>
+      <div class="selection-card" onclick="selectOrderType('Dibawa Pulang')">
+        <span class="sc-icon">🛍️</span>
+        <span class="sc-title">Dibawa Pulang</span>
+      </div>
+    </div>
+  `;
+}
+
+function selectOrderType(type) {
+  pendingTxn.orderType = type;
+  closeModal();
+  finalizePayment();
+}
+
+function finalizePayment() {
   const txn = {
     id: state.nextTxnId++,
     date: new Date().toISOString(),
+    paymentMethod: pendingTxn.paymentMethod,
+    orderType: pendingTxn.orderType,
     items: state.cart.map(c => {
       const item = state.menu.find(m => m.id === c.menuId);
       return {
         name: item.name,
-        emoji: item.emoji,
+        emoji: item.emoji || '🍽️',
         price: item.price,
         qty: c.qty,
         subtotal: item.price * c.qty,
@@ -2202,11 +2314,14 @@ function renderHistory() {
   container.innerHTML = filtered.map(t => `
     <div class="history-item" onclick="showTxnDetail(${t.id})">
       <div class="hi-top">
-        <span class="hi-id">#${t.id}</span>
+        <span class="hi-id">#${t.id} <span style="color:var(--text-muted);font-weight:400;font-size:0.75rem;">· ${t.orderType || '-'}</span></span>
         <span class="hi-time">${formatTime(t.date)}</span>
       </div>
-      <div class="hi-items">${t.items.map(i => `${i.emoji} ${i.name} x${i.qty}`).join(', ')}</div>
-      <div class="hi-total">${formatRupiah(t.total)}</div>
+      <div class="hi-items">${t.items.map(i => `${i.emoji || '🍽️'} ${i.name} x${i.qty}`).join(', ')}</div>
+      <div class="flex justify-between items-center mt-12">
+        <span style="font-size:0.72rem;padding:2px 6px;background:var(--bg-card);border-radius:4px;color:${t.paymentMethod === 'ShopeePay' ? '#ee4d2d' : 'var(--success)'}">${t.paymentMethod === 'ShopeePay' ? '📱 ShopeePay' : '💵 Tunai'}</span>
+        <span class="hi-total">${formatRupiah(t.total)}</span>
+      </div>
     </div>
   `).join('');
 }
@@ -2218,16 +2333,22 @@ function showTxnDetail(txnId) {
   const modal = document.getElementById('modal-overlay');
   document.getElementById('modal-title').textContent = `Transaksi #${txn.id}`;
   document.getElementById('modal-body').innerHTML = `
-    <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">
-      📅 ${formatDate(txn.date)} · ${formatTime(txn.date)}
+    <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
+      <span>📅 ${formatDate(txn.date)} · ${formatTime(txn.date)}</span>
+      <span style="padding:4px 8px;background:var(--bg-secondary);border-radius:6px;font-weight:600;">${txn.orderType || '-'}</span>
     </div>
     <div class="txn-detail-items">
       ${txn.items.map(i => `
         <div class="txn-detail-item">
-          <span>${i.emoji} ${i.name} × ${i.qty}</span>
+          <div class="tdi-left">
+            <span>${i.emoji || '🍽️'} ${i.name} × ${i.qty}</span>
+          </div>
           <span>${formatRupiah(i.subtotal)}</span>
         </div>
       `).join('')}
+    </div>
+    <div class="txn-detail-total" style="border-top:none;padding-top:8px;margin-top:0;">
+      <span style="font-size:0.8rem;color:var(--text-muted);font-weight:500;">Metode Bayar: ${txn.paymentMethod === 'ShopeePay' ? '<span style="color:#ee4d2d">ShopeePay</span>' : '<span style="color:var(--success)">Tunai</span>'}</span>
     </div>
     <div class="txn-detail-total">
       <span>TOTAL</span>
@@ -2558,21 +2679,23 @@ function renderMenuManage() {
   }
 
   container.innerHTML = filtered.map(item => `
-    <div class="history-item" style="display:flex;align-items:center;gap:12px;">
-      <span style="font-size:1.5rem">${item.emoji}</span>
-      <div style="flex:1">
-        <div style="font-weight:600;font-size:0.88rem;">${item.name}</div>
-        <div style="font-size:0.75rem;color:var(--text-muted)">${item.category} · ${formatRupiah(item.price)}</div>
+    <div class="menu-manage-item">
+      <div class="mmi-thumb">
+        ${item.image ? `<img src="${item.image}">` : `<div class="mmi-thumb-placeholder">${item.emoji || '🍽️'}</div>`}
       </div>
-      <button class="btn btn-secondary btn-icon" onclick="editMenu(${item.id})" title="Edit">✏️</button>
-      <button class="btn btn-danger btn-icon" onclick="deleteMenu(${item.id})" title="Hapus" style="flex:0;padding:10px;">🗑</button>
+      <div class="mmi-info">
+        <div class="mmi-name">${item.name}</div>
+        <div class="mmi-meta">${item.category} · ${formatRupiah(item.price)}</div>
+      </div>
+      <div class="mmi-actions">
+        <button class="btn btn-secondary btn-icon" onclick="editMenu(${item.id})" title="Edit">✏️</button>
+        <button class="btn btn-danger btn-icon" onclick="deleteMenu(${item.id})" title="Hapus">🗑</button>
+      </div>
     </div>
   `).join('');
 }
 
-const FOOD_EMOJIS = ['🍛','🍜','🥣','🍲','🍗','🥘','🥗','🍱','🍢','🍕','🍔','🌮','🥙','🍣','🥡','🍝','🥩','🍖','🥚','🧆','🥪','🌯'];
-const DRINK_EMOJIS = ['🧊','🍊','☕','🍵','🥑','🥭','🍧','💧','🧃','🥤','🍺','🍹','🥛','🫗','🧋'];
-const SNACK_EMOJIS = ['🥠','🥟','🍌','🧈','🍪','🍩','🍰','🧁','🥐','🍿','🥨','🥜'];
+// Emoji arrays removed, replaced with image upload logic
 
 function showAddMenuModal() {
   const modal = document.getElementById('modal-overlay');
@@ -2598,11 +2721,18 @@ function showAddMenuModal() {
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label">Emoji / Ikon</label>
-      <div class="emoji-picker-grid" id="emoji-grid">
-        ${allEmojis.map(e => `<button type="button" class="emoji-option" onclick="selectEmoji(this, '${e}')">${e}</button>`).join('')}
+      <label class="form-label">Gambar Menu</label>
+      <div class="img-upload-area" id="img-upload-area" onclick="document.getElementById('input-image-file').click()">
+        <div class="upload-placeholder" id="upload-placeholder">
+          <span class="upload-icon">📸</span>
+          <p>Klik untuk upload gambar</p>
+          <p class="upload-hint">Format: JPG, PNG (Max 2MB)</p>
+        </div>
+        <img src="" class="preview-img hidden" id="preview-img" style="display:none;">
+        <button type="button" class="remove-img-btn hidden" id="remove-img-btn" onclick="removeImage(event)" style="display:none;">✕</button>
       </div>
-      <input type="hidden" id="input-emoji" value="🍛">
+      <input type="file" id="input-image-file" accept="image/*" onchange="handleImageUpload(event)">
+      <input type="hidden" id="input-image-base64" value="">
     </div>
   `;
   document.getElementById('modal-footer').innerHTML = `
@@ -2615,17 +2745,49 @@ function showAddMenuModal() {
   document.querySelector('.emoji-option')?.classList.add('selected');
 }
 
-function selectEmoji(el, emoji) {
-  document.querySelectorAll('.emoji-option').forEach(e => e.classList.remove('selected'));
-  el.classList.add('selected');
-  document.getElementById('input-emoji').value = emoji;
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (file.size > 2 * 1024 * 1024) {
+    alert('Ukuran gambar terlalu besar! Maksimal 2MB.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    const base64 = event.target.result;
+    document.getElementById('input-image-base64').value = base64;
+    
+    // Show preview
+    document.getElementById('upload-placeholder').style.display = 'none';
+    const preview = document.getElementById('preview-img');
+    preview.src = base64;
+    preview.style.display = 'block';
+    
+    const removeBtn = document.getElementById('remove-img-btn');
+    removeBtn.style.display = 'flex';
+    document.getElementById('img-upload-area').classList.add('has-image');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage(e) {
+  e.stopPropagation();
+  document.getElementById('input-image-file').value = '';
+  document.getElementById('input-image-base64').value = '';
+  
+  document.getElementById('upload-placeholder').style.display = 'block';
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('remove-img-btn').style.display = 'none';
+  document.getElementById('img-upload-area').classList.remove('has-image');
 }
 
 function saveNewMenu() {
   const name = document.getElementById('input-name').value.trim();
   const price = parseInt(document.getElementById('input-price').value);
   const category = document.getElementById('input-category').value;
-  const emoji = document.getElementById('input-emoji').value;
+  const imageBase64 = document.getElementById('input-image-base64').value;
 
   if (!name) { alert('Nama menu harus diisi!'); return; }
   if (!price || price <= 0) { alert('Harga harus lebih dari 0!'); return; }
@@ -2634,7 +2796,8 @@ function saveNewMenu() {
     id: state.nextMenuId++,
     name,
     price,
-    emoji,
+    emoji: imageBase64 ? null : '🍽️', // Fallback
+    image: imageBase64,
     category,
   });
 
@@ -2672,11 +2835,18 @@ function editMenu(menuId) {
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label">Emoji / Ikon</label>
-      <div class="emoji-picker-grid" id="emoji-grid">
-        ${allEmojis.map(e => `<button type="button" class="emoji-option ${e === item.emoji ? 'selected' : ''}" onclick="selectEmoji(this, '${e}')">${e}</button>`).join('')}
+      <label class="form-label">Gambar Menu</label>
+      <div class="img-upload-area ${item.image ? 'has-image' : ''}" id="img-upload-area" onclick="document.getElementById('input-image-file').click()">
+        <div class="upload-placeholder" id="upload-placeholder" style="display: ${item.image ? 'none' : 'block'};">
+          <span class="upload-icon">📸</span>
+          <p>Klik untuk upload gambar</p>
+          <p class="upload-hint">Format: JPG, PNG (Max 2MB)</p>
+        </div>
+        <img src="${item.image || ''}" class="preview-img" id="preview-img" style="display: ${item.image ? 'block' : 'none'};">
+        <button type="button" class="remove-img-btn" id="remove-img-btn" onclick="removeImage(event)" style="display: ${item.image ? 'flex' : 'none'};">✕</button>
       </div>
-      <input type="hidden" id="input-emoji" value="${item.emoji}">
+      <input type="file" id="input-image-file" accept="image/*" onchange="handleImageUpload(event)">
+      <input type="hidden" id="input-image-base64" value="${item.image || ''}">
     </div>
   `;
   document.getElementById('modal-footer').innerHTML = `
@@ -2693,7 +2863,7 @@ function updateMenu(menuId) {
   const name = document.getElementById('input-name').value.trim();
   const price = parseInt(document.getElementById('input-price').value);
   const category = document.getElementById('input-category').value;
-  const emoji = document.getElementById('input-emoji').value;
+  const imageBase64 = document.getElementById('input-image-base64').value;
 
   if (!name) { alert('Nama menu harus diisi!'); return; }
   if (!price || price <= 0) { alert('Harga harus lebih dari 0!'); return; }
@@ -2701,7 +2871,8 @@ function updateMenu(menuId) {
   item.name = name;
   item.price = price;
   item.category = category;
-  item.emoji = emoji;
+  item.image = imageBase64;
+  item.emoji = imageBase64 ? null : '🍽️';
 
   saveData();
   closeModal();
@@ -2737,6 +2908,8 @@ function exportToExcel() {
         'No Transaksi': txn.id,
         'Tanggal': formatDate(txn.date),
         'Waktu': formatTime(txn.date),
+        'Metode Bayar': txn.paymentMethod || 'Tunai',
+        'Jenis Pesanan': txn.orderType || '-',
         'Menu': item.name,
         'Harga': item.price,
         'Jumlah': item.qty,
@@ -2782,7 +2955,7 @@ function exportToExcel() {
 
   // Set column widths
   ws1['!cols'] = [
-    { wch: 12 }, { wch: 14 }, { wch: 8 }, { wch: 20 },
+    { wch: 12 }, { wch: 14 }, { wch: 8 }, { wch: 15 }, { wch: 15 }, { wch: 20 },
     { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 14 },
   ];
   ws2['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 16 }];

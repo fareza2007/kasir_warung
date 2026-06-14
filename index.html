@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Aplikasi Kasir Warung Sederhana - Kelola pesanan, hitung pemasukan, dan export laporan ke Excel">
+  <title>Kasir Warung - Aplikasi Kasir Sederhana</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js for graphics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ===== HEADER ===== -->
+  <header class="app-header">
+    <div class="app-logo">
+      <div class="logo-icon">🏪</div>
+      <div>
+        <h1>KASIR WARUNG</h1>
+        <div class="subtitle" id="current-date"></div>
+      </div>
+    </div>
+
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-page="kasir" onclick="switchPage('kasir')">
+        <span class="tab-icon">🛒</span>
+        <span class="tab-text">Kasir</span>
+      </button>
+      <button class="nav-tab" data-page="keuangan" onclick="switchPage('keuangan')">
+        <span class="tab-icon">📊</span>
+        <span class="tab-text">Keuangan</span>
+      </button>
+      <button class="nav-tab" data-page="riwayat" onclick="switchPage('riwayat')">
+        <span class="tab-icon">📋</span>
+        <span class="tab-text">Riwayat</span>
+      </button>
+      <button class="nav-tab" data-page="menu" onclick="switchPage('menu')">
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-text">Kelola Menu</span>
+      </button>
+    </nav>
+
+    <div class="header-actions">
+      <button class="btn btn-success" onclick="exportToExcel()" title="Export ke Excel">
+        📥 <span class="tab-text">Export Excel</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== PAGE: KASIR ===== -->
+  <section id="page-kasir" class="page-section active">
+    <div class="kasir-layout">
+
+      <!-- Menu Area -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title"><span class="icon">🍽️</span> Daftar Menu</h2>
+        </div>
+        <div class="category-filters" id="category-filters"></div>
+        <div class="menu-grid" id="menu-grid"></div>
+      </div>
+
+      <!-- Cart Area -->
+      <div class="section-card cart-section">
+        <div class="section-header">
+          <h2 class="section-title"><span class="icon">🛒</span> Keranjang</h2>
+          <button class="btn btn-danger btn-icon" onclick="clearCart()" title="Kosongkan" style="padding:8px 12px;font-size:0.75rem;">🗑</button>
+        </div>
+
+        <div class="cart-items" id="cart-items"></div>
+
+        <div class="cart-footer">
+          <div class="cart-total-row">
+            <span class="cart-total-label">TOTAL</span>
+            <span class="cart-total-amount" id="cart-total">Rp 0</span>
+          </div>
+          <div class="cart-actions">
+            <button class="btn btn-primary" id="btn-pay" onclick="processPayment()" disabled>
+              💰 Bayar & Simpan
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== PAGE: KEUANGAN (Dashboard) ===== -->
+  <section id="page-keuangan" class="page-section">
+
+    <!-- Period Selector -->
+    <div class="flex items-center justify-between mb-8" style="margin-bottom:16px;">
+      <h2 class="section-title" style="font-size:1.1rem;"><span class="icon">📊</span> Dashboard Keuangan</h2>
+      <div class="period-selector">
+        <button class="period-btn active" data-period="hari" onclick="setPeriod('hari')">Hari Ini</button>
+        <button class="period-btn" data-period="minggu" onclick="setPeriod('minggu')">Minggu</button>
+        <button class="period-btn" data-period="bulan" onclick="setPeriod('bulan')">Bulan</button>
+        <button class="period-btn" data-period="semua" onclick="setPeriod('semua')">Semua</button>
+      </div>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="dashboard-grid">
+      <div class="stat-card accent">
+        <div class="sc-icon">💰</div>
+        <div class="sc-label">Total Pemasukan</div>
+        <div class="sc-value" id="stat-income">Rp 0</div>
+        <div class="sc-sub" id="stat-income-sub">Hari Ini</div>
+      </div>
+      <div class="stat-card success">
+        <div class="sc-icon">🧾</div>
+        <div class="sc-label">Jumlah Transaksi</div>
+        <div class="sc-value" id="stat-txn">0</div>
+        <div class="sc-sub" id="stat-txn-sub">Hari Ini</div>
+      </div>
+      <div class="stat-card info">
+        <div class="sc-icon">📈</div>
+        <div class="sc-label">Rata-rata</div>
+        <div class="sc-value" id="stat-avg">Rp 0</div>
+        <div class="sc-sub" id="stat-avg-sub">per transaksi</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="sc-icon">📦</div>
+        <div class="sc-label">Item Terjual</div>
+        <div class="sc-value" id="stat-items">0</div>
+        <div class="sc-sub" id="stat-items-sub">item terjual</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">📊 Grafik Pemasukan</h3>
+        </div>
+        <div style="height:300px;"><canvas id="income-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">🏆 Menu Terlaris</h3>
+        </div>
+        <div style="height:300px;"><canvas id="top-items-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Top Items Table -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title"><span class="icon">🥇</span> Top Menu Berdasarkan Pendapatan</h2>
+      </div>
+      <div class="section-body" id="top-items-table"></div>
+    </div>
+
+  </section>
+
+  <!-- ===== PAGE: RIWAYAT ===== -->
+  <section id="page-riwayat" class="page-section">
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title"><span class="icon">📋</span> Riwayat Transaksi</h2>
+        <div class="riwayat-controls">
+          <input type="date" class="date-input" id="history-date">
+        </div>
+      </div>
+      <div class="daily-summary" id="history-summary"></div>
+      <div class="history-list" id="history-list"></div>
+    </div>
+  </section>
+
+  <!-- ===== PAGE: KELOLA MENU ===== -->
+  <section id="page-menu" class="page-section">
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title"><span class="icon">⚙️</span> Kelola Menu</h2>
+        <div class="riwayat-controls">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="menu-search" placeholder="Cari menu...">
+          </div>
+          <button class="btn btn-primary" onclick="showAddMenuModal()">➕ Tambah Menu</button>
+        </div>
+      </div>
+      <div id="menu-manage-list"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ===== MODAL ===== -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Modal</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- ===== SUCCESS OVERLAY ===== -->
+<div class="success-overlay hidden" id="success-overlay">
+  <div class="success-icon-big">✅</div>
+  <div class="success-text">Transaksi Berhasil!</div>
+  <div class="success-amount" id="success-amount">Rp 0</div>
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>

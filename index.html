@@ -3531,13 +3531,13 @@ function saveSetup() {
     state.token = tokenInput;
     state.isSetup = true;
   } else {
-    const enteredToken = document.getElementById('setup-token-karyawan').value.trim();
+    const enteredToken = document.getElementById('setup-token-karyawan').value.trim().toUpperCase();
     if (!enteredToken) {
       alert('Harap masukkan Token Karyawan!');
       return;
     }
     
-    const savedToken = localStorage.getItem('kasir_token') || 'KASIR123';
+    const savedToken = (localStorage.getItem('kasir_token') || 'KASIR123').trim().toUpperCase();
     const savedShopName = localStorage.getItem('kasir_shopName') || 'Kasir Warung';
     
     if (enteredToken !== savedToken) {

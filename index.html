@@ -1853,6 +1853,170 @@ body::before {
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 
+/* --- Onboarding Role Selection & Header Badges --- */
+.role-selection-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.role-card {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.role-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-active);
+}
+
+.role-card.active {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.15);
+}
+
+.role-card .role-icon {
+  font-size: 1.8rem;
+  margin-bottom: 2px;
+}
+
+.role-card .role-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.role-card .role-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+/* User Role Badge in Header */
+.user-role-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+}
+
+.badge-role {
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.badge-token-info {
+  color: var(--text-muted);
+  border-left: 1px solid var(--border);
+  padding-left: 8px;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.badge-token-info:hover {
+  color: var(--text-primary);
+}
+
+/* Edit shop name header button styling */
+.edit-name-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+  opacity: 0.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-logo:hover .edit-name-btn {
+  opacity: 1;
+}
+
+.edit-name-btn:hover {
+  color: var(--accent-primary);
+  background: var(--accent-glow);
+}
+
+/* --- Thermal Receipt Paper Preview --- */
+.receipt-preview-container {
+  background: #ffffff;
+  color: #000000;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  padding: 24px 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+  max-height: 380px;
+  overflow-y: auto;
+  border-top: 4px dashed #888888;
+  border-bottom: 4px dashed #888888;
+  text-align: left;
+}
+
+.receipt-preview-line {
+  display: flex;
+  justify-content: space-between;
+  margin: 2px 0;
+}
+
+.receipt-preview-center {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.receipt-preview-divider {
+  border-top: 1px dashed #000000;
+  margin: 8px 0;
+}
+
+/* Print Override for thermal printing */
+#temporary-print-receipt {
+  display: none;
+}
+
+@media print {
+  body.printing-receipt > * {
+    display: none !important;
+  }
+  body.printing-receipt #temporary-print-receipt {
+    display: block !important;
+    width: 58mm;
+    margin: 0 auto;
+    padding: 10px;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 9pt;
+    line-height: 1.3;
+  }
+  body.printing-receipt #temporary-print-receipt .receipt-preview-divider {
+    border-top: 1px dashed #000000 !important;
+  }
+}
+
+
+
 </style>
   <!-- Chart.js for graphics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
@@ -1861,14 +2025,71 @@ body::before {
 </head>
 <body>
 
-<div class="app-container">
+<!-- ===== WELCOME / SETUP SCREEN ===== -->
+<div class="welcome-overlay" id="welcome-overlay">
+  <div class="welcome-container">
+    <div class="welcome-logo">🏪</div>
+    <h2 class="welcome-title">Kasir Warung</h2>
+    <p class="welcome-subtitle">Aplikasi Kasir Sederhana. Silakan atur nama warung dan peran Anda untuk memulai.</p>
+    
+    <div class="welcome-form">
+      <!-- Step 1: Shop Name -->
+      <div class="form-group">
+        <label class="form-label">Nama Warung / Toko</label>
+        <input type="text" class="form-input" id="setup-shop-name" placeholder="cth: Warung Jaya Makmur" value="Kasir Warung">
+      </div>
+      
+      <!-- Step 2: Role Selection -->
+      <div class="form-group" style="margin-top: 18px;">
+        <label class="form-label">Pilih Peran Anda</label>
+        <div class="role-selection-grid">
+          <div class="role-card active" id="role-bos" onclick="selectSetupRole('Bos')">
+            <span class="role-icon">💼</span>
+            <span class="role-title">Bos (Pemilik)</span>
+            <span class="role-desc">Akses penuh keuangan & riwayat</span>
+          </div>
+          <div class="role-card" id="role-karyawan" onclick="selectSetupRole('Karyawan')">
+            <span class="role-icon">🧑‍🍳</span>
+            <span class="role-title">Karyawan</span>
+            <span class="role-desc">Hanya akses transaksi kasir</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Step 3: Token Input (conditional) -->
+      <!-- For Bos: Set Token -->
+      <div class="form-group" id="setup-token-bos-group" style="margin-top: 18px;">
+        <label class="form-label">Token Karyawan (Pin/Sandi Karyawan)</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" class="form-input" id="setup-token-bos" placeholder="Sandi untuk karyawan" style="text-align: left;" value="KASIR123">
+          <button class="btn btn-secondary" onclick="generateRandomToken()" style="flex: 0; padding: 0 16px; min-width: 48px;" type="button">🎲</button>
+        </div>
+        <p class="form-hint" style="text-align: left; margin-top: 4px;">Berikan token ini kepada karyawan agar mereka bisa masuk.</p>
+      </div>
+      
+      <!-- For Karyawan: Enter Token -->
+      <div class="form-group" id="setup-token-karyawan-group" style="margin-top: 18px; display: none;">
+        <label class="form-label">Masukkan Token Karyawan</label>
+        <input type="text" class="form-input" id="setup-token-karyawan" placeholder="Tanyakan token ke Bos Anda" style="text-align: center;">
+      </div>
+      
+      <button class="welcome-btn" onclick="saveSetup()">Mulai Aplikasi ➔</button>
+    </div>
+    <div class="welcome-decor">Kasir Warung · Mandiri & Praktis</div>
+  </div>
+</div>
+
+<div class="app-container" id="app-container">
 
   <!-- ===== HEADER ===== -->
   <header class="app-header">
     <div class="app-logo">
       <div class="logo-icon">🏪</div>
       <div>
-        <h1>KASIR WARUNG</h1>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <h1 id="shop-title-display">KASIR WARUNG</h1>
+          <button class="edit-name-btn" id="edit-shop-name-btn" onclick="editShopName()" title="Ubah Nama Warung">✏️</button>
+        </div>
         <div class="subtitle" id="current-date"></div>
       </div>
     </div>
@@ -1878,11 +2099,11 @@ body::before {
         <span class="tab-icon">🛒</span>
         <span class="tab-text">Kasir</span>
       </button>
-      <button class="nav-tab" data-page="keuangan" onclick="switchPage('keuangan')">
+      <button class="nav-tab" data-page="keuangan" id="nav-keuangan" onclick="switchPage('keuangan')">
         <span class="tab-icon">📊</span>
         <span class="tab-text">Keuangan</span>
       </button>
-      <button class="nav-tab" data-page="riwayat" onclick="switchPage('riwayat')">
+      <button class="nav-tab" data-page="riwayat" id="nav-riwayat" onclick="switchPage('riwayat')">
         <span class="tab-icon">📋</span>
         <span class="tab-text">Riwayat</span>
       </button>
@@ -1893,6 +2114,20 @@ body::before {
     </nav>
 
     <div class="header-actions">
+      <!-- User Profile & Badge -->
+      <div class="user-role-badge" id="header-user-badge">
+        <span class="badge-role" id="role-badge-text">💼 Bos</span>
+        <span class="badge-token-info" id="token-badge-text" title="Token Karyawan. Klik untuk salin" onclick="copyEmployeeToken()">Token: KASIR123 📋</span>
+      </div>
+      
+      <button class="btn btn-secondary btn-icon" onclick="resetSetup()" title="Keluar / Ganti Akun" style="padding: 8px 12px; min-width: 40px;">
+        ↩️
+      </button>
+
+      <button class="btn btn-secondary btn-icon" id="btn-connect-printer" onclick="connectBluetoothPrinter()" title="Sambungkan Printer Bluetooth" style="padding: 8px 12px; gap: 6px; min-width: 40px;">
+        🖨️ <span class="tab-text">Hubungkan Printer</span>
+      </button>
+
       <button class="btn btn-success" onclick="exportToExcel()" title="Export ke Excel">
         📥 <span class="tab-text">Export Excel</span>
       </button>
@@ -2066,6 +2301,35 @@ body::before {
   </div>
 </div>
 
+<!-- ===== RECEIPT PREVIEW MODAL ===== -->
+<div class="modal-overlay hidden" id="receipt-modal-overlay">
+  <div class="modal" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 style="display: flex; align-items: center; gap: 8px;">🎉 Transaksi Berhasil!</h3>
+      <button class="modal-close" onclick="closeReceiptModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding: 16px; background: #1a1a24;">
+      <!-- Struk Thermal Preview -->
+      <div class="receipt-preview-container" id="receipt-preview-content">
+        <!-- Receipt content injected here dynamically -->
+      </div>
+    </div>
+    <div class="modal-footer" style="flex-direction: column; gap: 10px; padding: 16px;">
+      <div style="display: flex; width: 100%; gap: 8px;">
+        <button class="btn btn-primary" onclick="printReceiptFromModal('bluetooth')" style="flex: 1; padding: 12px 6px;">
+          🖨️ Cetak Bluetooth
+        </button>
+        <button class="btn btn-secondary" onclick="printReceiptFromModal('browser')" style="flex: 1; padding: 12px 6px;">
+          📄 Cetak Browser / PDF
+        </button>
+      </div>
+      <button class="btn btn-success" onclick="closeReceiptModal()" style="width: 100%;">
+        ✅ Transaksi Baru
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================
 // KASIR WARUNG - Application Logic
@@ -2084,6 +2348,12 @@ const state = {
   dashboardPeriod: 'hari',
   nextMenuId: 100,
   nextTxnId: 1,
+  
+  // Setup & Role State
+  shopName: 'Kasir Warung',
+  role: 'Bos',
+  token: 'KASIR123',
+  isSetup: false,
 };
 
 // --- Helper Functions ---
@@ -2116,6 +2386,11 @@ function saveData() {
   localStorage.setItem('kasir_transactions', JSON.stringify(state.transactions));
   localStorage.setItem('kasir_nextMenuId', state.nextMenuId);
   localStorage.setItem('kasir_nextTxnId', state.nextTxnId);
+  
+  localStorage.setItem('kasir_shopName', state.shopName);
+  localStorage.setItem('kasir_role', state.role);
+  localStorage.setItem('kasir_token', state.token);
+  localStorage.setItem('kasir_isSetup', state.isSetup ? 'true' : 'false');
 }
 
 function loadData() {
@@ -2128,10 +2403,19 @@ function loadData() {
   state.transactions = txns ? JSON.parse(txns) : [];
   state.nextMenuId = nextMenuId ? parseInt(nextMenuId) : 100;
   state.nextTxnId = nextTxnId ? parseInt(nextTxnId) : 1;
+
+  state.shopName = localStorage.getItem('kasir_shopName') || 'Kasir Warung';
+  state.role = localStorage.getItem('kasir_role') || 'Bos';
+  state.token = localStorage.getItem('kasir_token') || 'KASIR123';
+  state.isSetup = localStorage.getItem('kasir_isSetup') === 'true';
 }
 
 // --- Navigation ---
 function switchPage(page) {
+  if (state.role === 'Karyawan' && (page === 'keuangan' || page === 'riwayat')) {
+    alert('Akses Ditolak! Bagian Keuangan dan Riwayat Transaksi hanya dapat diakses oleh Bos.');
+    return;
+  }
   state.activePage = page;
   document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -2475,8 +2759,8 @@ function finalizePayment() {
   state.transactions.push(txn);
   saveData();
 
-  // Show success
-  showSuccess(txn.total, pendingTxn.change);
+  // Open receipt preview and print options
+  openReceiptModal(txn);
 
   // Clear cart
   state.cart = [];
@@ -3203,6 +3487,476 @@ function exportToExcel() {
   XLSX.writeFile(wb, fileName);
 }
 
+// --- Setup & Role Management Functions ---
+let selectedRole = 'Bos';
+
+function selectSetupRole(role) {
+  selectedRole = role;
+  document.getElementById('role-bos').classList.toggle('active', role === 'Bos');
+  document.getElementById('role-karyawan').classList.toggle('active', role === 'Karyawan');
+  
+  if (role === 'Bos') {
+    document.getElementById('setup-token-bos-group').style.display = 'block';
+    document.getElementById('setup-token-karyawan-group').style.display = 'none';
+  } else {
+    document.getElementById('setup-token-bos-group').style.display = 'none';
+    document.getElementById('setup-token-karyawan-group').style.display = 'block';
+  }
+}
+
+function generateRandomToken() {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let randToken = '';
+  for (let i = 0; i < 6; i++) {
+    randToken += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  document.getElementById('setup-token-bos').value = randToken;
+}
+
+function saveSetup() {
+  const shopNameInput = document.getElementById('setup-shop-name').value.trim();
+  if (!shopNameInput) {
+    alert('Nama Warung / Toko tidak boleh kosong!');
+    return;
+  }
+  
+  if (selectedRole === 'Bos') {
+    const tokenInput = document.getElementById('setup-token-bos').value.trim();
+    if (!tokenInput) {
+      alert('Token Karyawan tidak boleh kosong!');
+      return;
+    }
+    state.shopName = shopNameInput;
+    state.role = 'Bos';
+    state.token = tokenInput;
+    state.isSetup = true;
+  } else {
+    const enteredToken = document.getElementById('setup-token-karyawan').value.trim();
+    if (!enteredToken) {
+      alert('Harap masukkan Token Karyawan!');
+      return;
+    }
+    
+    const savedToken = localStorage.getItem('kasir_token') || 'KASIR123';
+    const savedShopName = localStorage.getItem('kasir_shopName') || 'Kasir Warung';
+    
+    if (enteredToken !== savedToken) {
+      alert('Token Karyawan salah! Tanyakan pada Bos.');
+      return;
+    }
+    
+    state.shopName = savedShopName;
+    state.role = 'Karyawan';
+    state.token = enteredToken;
+    state.isSetup = true;
+  }
+  
+  saveData();
+  
+  document.getElementById('welcome-overlay').classList.add('hidden');
+  document.getElementById('app-container').classList.remove('hidden');
+  document.getElementById('shop-title-display').textContent = state.shopName;
+  
+  if (state.role === 'Karyawan') {
+    switchPage('kasir');
+  }
+  
+  applyRoleRestrictions();
+  
+  alert('Setup berhasil! Peran Anda: ' + (state.role === 'Bos' ? '💼 Bos (Pemilik)' : '🧑‍🍳 Karyawan'));
+}
+
+function resetSetup() {
+  if (confirm('Apakah Anda yakin ingin keluar dan mengganti peran / nama warung?')) {
+    state.isSetup = false;
+    localStorage.removeItem('kasir_isSetup');
+    localStorage.removeItem('kasir_role');
+    
+    document.getElementById('welcome-overlay').classList.remove('hidden');
+    document.getElementById('app-container').classList.add('hidden');
+    
+    document.getElementById('setup-shop-name').value = state.shopName;
+    selectSetupRole('Bos');
+    document.getElementById('setup-token-bos').value = state.token;
+    document.getElementById('setup-token-karyawan').value = '';
+  }
+}
+
+function applyRoleRestrictions() {
+  const navKeuangan = document.getElementById('nav-keuangan');
+  const navRiwayat = document.getElementById('nav-riwayat');
+  const editShopBtn = document.getElementById('edit-shop-name-btn');
+  const userBadge = document.getElementById('header-user-badge');
+  const roleText = document.getElementById('role-badge-text');
+  const tokenText = document.getElementById('token-badge-text');
+  
+  if (state.role === 'Bos') {
+    if (navKeuangan) navKeuangan.style.display = 'flex';
+    if (navRiwayat) navRiwayat.style.display = 'flex';
+    if (editShopBtn) editShopBtn.style.display = 'inline-flex';
+    
+    if (userBadge) userBadge.style.display = 'flex';
+    if (roleText) roleText.textContent = '💼 Bos';
+    if (tokenText) {
+      tokenText.style.display = 'inline-block';
+      tokenText.textContent = `Token: ${state.token} 📋`;
+    }
+  } else {
+    if (navKeuangan) navKeuangan.style.display = 'none';
+    if (navRiwayat) navRiwayat.style.display = 'none';
+    if (editShopBtn) editShopBtn.style.display = 'none';
+    
+    if (state.activePage === 'keuangan' || state.activePage === 'riwayat') {
+      switchPage('kasir');
+    }
+    
+    if (userBadge) userBadge.style.display = 'flex';
+    if (roleText) roleText.textContent = '🧑‍🍳 Karyawan';
+    if (tokenText) tokenText.style.display = 'none';
+  }
+}
+
+function editShopName() {
+  if (state.role !== 'Bos') return;
+  const newName = prompt('Masukkan nama warung baru:', state.shopName);
+  if (newName !== null) {
+    const trimmed = newName.trim();
+    if (trimmed) {
+      state.shopName = trimmed;
+      document.getElementById('shop-title-display').textContent = trimmed;
+      saveData();
+    } else {
+      alert('Nama warung tidak boleh kosong!');
+    }
+  }
+}
+
+function copyEmployeeToken() {
+  if (state.role !== 'Bos') return;
+  navigator.clipboard.writeText(state.token)
+    .then(() => alert('Token Karyawan berhasil disalin ke clipboard!'))
+    .catch(() => alert('Gagal menyalin token.'));
+}
+
+// --- Bluetooth Printer & Receipt Formatting ---
+let printerDevice = null;
+let printerCharacteristic = null;
+let currentTxnForReceipt = null;
+
+async function connectBluetoothPrinter() {
+  try {
+    if (!navigator.bluetooth) {
+      alert("Browser Anda tidak mendukung Web Bluetooth. Gunakan Google Chrome, Microsoft Edge, atau Opera.");
+      return;
+    }
+    
+    updatePrinterStatus("Connecting...");
+    
+    // Request any Bluetooth device with options
+    printerDevice = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [
+        '000018f0-0000-1000-8000-00805f9b34fb', // Bluetooth printing standard service
+        '00001101-0000-1000-8000-00805f9b34fb', // Serial Port Profile (SPP)
+        'e7e1a12c-a09c-11e5-8994-feff819cdc9f'  // Raw printing service
+      ]
+    });
+    
+    const server = await printerDevice.gatt.connect();
+    
+    // Attempt to discover standard printing service, fall back to serial profile
+    let service;
+    try {
+      service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+    } catch (e) {
+      try {
+        service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
+      } catch (err) {
+        const services = await server.getPrimaryServices();
+        if (services.length > 0) {
+          service = services[0];
+        } else {
+          throw new Error("Layanan Bluetooth Printer tidak ditemukan.");
+        }
+      }
+    }
+    
+    const characteristics = await service.getCharacteristics();
+    // Find write characteristic
+    printerCharacteristic = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
+    
+    if (!printerCharacteristic) {
+      throw new Error("Karakteristik menulis data printer tidak ditemukan.");
+    }
+    
+    updatePrinterStatus("Connected");
+    alert("Printer Bluetooth berhasil terhubung!");
+    
+    printerDevice.addEventListener('gattserverdisconnected', onPrinterDisconnected);
+  } catch (error) {
+    console.error(error);
+    updatePrinterStatus("Disconnected");
+    alert("Gagal menyambungkan printer: " + error.message);
+  }
+}
+
+function onPrinterDisconnected() {
+  printerDevice = null;
+  printerCharacteristic = null;
+  updatePrinterStatus("Disconnected");
+  alert("Koneksi printer Bluetooth terputus!");
+}
+
+function updatePrinterStatus(status) {
+  const btn = document.getElementById('btn-connect-printer');
+  if (!btn) return;
+  if (status === "Connected") {
+    btn.innerHTML = "🖨️ Terhubung";
+    btn.className = "btn btn-success";
+  } else if (status === "Connecting...") {
+    btn.innerHTML = "⏳ Menghubungkan...";
+    btn.className = "btn btn-secondary";
+  } else {
+    btn.innerHTML = "🖨️ Hubungkan Printer";
+    btn.className = "btn btn-secondary";
+  }
+}
+
+async function sendPrinterData(dataBytes) {
+  if (!printerCharacteristic) {
+    throw new Error("Printer tidak terhubung!");
+  }
+  
+  // Write in chunks of 20 bytes to avoid GATT overflow
+  const CHUNK_SIZE = 20;
+  for (let i = 0; i < dataBytes.length; i += CHUNK_SIZE) {
+    const chunk = dataBytes.slice(i, i + CHUNK_SIZE);
+    await printerCharacteristic.writeValue(chunk);
+    await new Promise(resolve => setTimeout(resolve, 20)); // delay 20ms
+  }
+}
+
+function formatReceiptESC(txn) {
+  const ESC = 0x1B;
+  const GS = 0x1D;
+  
+  const initPrinter = [ESC, 0x40];
+  const centerAlign = [ESC, 0x61, 0x01];
+  const leftAlign = [ESC, 0x61, 0x00];
+  const boldOn = [ESC, 0x45, 0x01];
+  const boldOff = [ESC, 0x45, 0x00];
+  const doubleHeight = [GS, 0x21, 0x01];
+  const normalSize = [GS, 0x21, 0x00];
+  
+  let commands = [];
+  const encoder = new TextEncoder();
+  
+  function addText(text) {
+    commands.push(...encoder.encode(text));
+  }
+  
+  function addCommand(cmdBytes) {
+    commands.push(...cmdBytes);
+  }
+
+  addCommand(initPrinter);
+  
+  // Header
+  addCommand(centerAlign);
+  addCommand(boldOn);
+  addCommand(doubleHeight);
+  addText(state.shopName.toUpperCase() + "\n");
+  addCommand(normalSize);
+  addCommand(boldOff);
+  addText("--------------------------------\n");
+  
+  // Metadata
+  addCommand(leftAlign);
+  addText(`No: #${txn.id}\n`);
+  addText(`Tgl: ${formatDate(txn.date)} ${formatTime(txn.date)}\n`);
+  addText(`Kasir: ${state.role === 'Bos' ? 'Bos' : 'Karyawan'}\n`);
+  addText(`Tipe: ${txn.orderType || 'Makan Disini'}\n`);
+  addText("--------------------------------\n");
+  
+  // Items
+  txn.items.forEach(item => {
+    addText(`${item.emoji || ''} ${item.name}\n`);
+    const qtyPriceStr = `  ${item.qty} x ${item.price.toLocaleString('id-ID')}`;
+    const subtotalStr = (item.price * item.qty).toLocaleString('id-ID');
+    const spacesCount = 32 - qtyPriceStr.length - subtotalStr.length;
+    const spaces = ' '.repeat(spacesCount > 0 ? spacesCount : 1);
+    addText(`${qtyPriceStr}${spaces}${subtotalStr}\n`);
+  });
+  
+  addText("--------------------------------\n");
+  
+  // Total
+  const totalLabel = "TOTAL:";
+  const totalVal = txn.total.toLocaleString('id-ID');
+  const tSpaces = ' '.repeat(32 - totalLabel.length - totalVal.length);
+  addCommand(boldOn);
+  addText(`${totalLabel}${tSpaces}${totalVal}\n`);
+  addCommand(boldOff);
+  
+  // Payment Details
+  if (txn.paymentMethod === 'Tunai') {
+    const cashLabel = "Bayar Tunai:";
+    const cashVal = txn.cash.toLocaleString('id-ID');
+    const cSpaces = ' '.repeat(32 - cashLabel.length - cashVal.length);
+    addText(`${cashLabel}${cSpaces}${cashVal}\n`);
+    
+    const changeLabel = "Kembalian:";
+    const changeVal = txn.change.toLocaleString('id-ID');
+    const chSpaces = ' '.repeat(32 - changeLabel.length - changeVal.length);
+    addText(`${changeLabel}${chSpaces}${changeVal}\n`);
+  } else {
+    const payLabel = "Bayar:";
+    const payVal = txn.paymentMethod;
+    const pSpaces = ' '.repeat(32 - payLabel.length - payVal.length);
+    addText(`${payLabel}${pSpaces}${payVal}\n`);
+  }
+  
+  addText("--------------------------------\n");
+  
+  addCommand(centerAlign);
+  addText("Terima Kasih\n");
+  addText("Silakan Datang Kembali\n\n\n\n\n");
+  
+  // Cut paper command
+  addCommand([GS, 0x56, 0x42, 0x00]);
+  
+  return new Uint8Array(commands);
+}
+
+async function printReceiptBluetooth(txn) {
+  if (!printerCharacteristic) {
+    alert("Printer Bluetooth tidak terhubung! Hubungkan printer terlebih dahulu menggunakan tombol di header.");
+    return;
+  }
+  
+  try {
+    const bytes = formatReceiptESC(txn);
+    await sendPrinterData(bytes);
+    alert("Struk berhasil dicetak!");
+  } catch (error) {
+    console.error(error);
+    alert("Gagal mencetak struk: " + error.message);
+  }
+}
+
+function printReceiptBrowser(txn) {
+  // Create temporary container for print
+  const printContainer = document.createElement('div');
+  printContainer.id = 'temporary-print-receipt';
+  printContainer.innerHTML = generateReceiptHTML(txn);
+  
+  document.body.appendChild(printContainer);
+  document.body.classList.add('printing-receipt');
+  
+  window.print();
+  
+  document.body.classList.remove('printing-receipt');
+  printContainer.remove();
+}
+
+function generateReceiptHTML(txn) {
+  let html = `
+    <div class="receipt-preview-center" style="font-weight: bold; font-size: 1.1rem; text-transform: uppercase;">
+      ${state.shopName}
+    </div>
+    <div class="receipt-preview-center" style="font-size: 0.75rem;">
+      Aplikasi Kasir Warung Sederhana
+    </div>
+    <div class="receipt-preview-divider"></div>
+    
+    <div>No Transaksi: #${txn.id}</div>
+    <div>Tanggal: ${formatDate(txn.date)} ${formatTime(txn.date)}</div>
+    <div>Kasir: ${state.role === 'Bos' ? 'Bos' : 'Karyawan'}</div>
+    <div>Tipe: ${txn.orderType || 'Makan Disini'}</div>
+    
+    <div class="receipt-preview-divider"></div>
+  `;
+  
+  txn.items.forEach(item => {
+    const subtotal = item.price * item.qty;
+    html += `
+      <div style="font-weight: 600;">${item.emoji || ''} ${item.name}</div>
+      <div class="receipt-preview-line">
+        <span>  ${item.qty} x Rp ${item.price.toLocaleString('id-ID')}</span>
+        <span>Rp ${subtotal.toLocaleString('id-ID')}</span>
+      </div>
+    `;
+  });
+  
+  html += `
+    <div class="receipt-preview-divider"></div>
+    <div class="receipt-preview-line" style="font-weight: bold; font-size: 1rem;">
+      <span>TOTAL</span>
+      <span>Rp ${txn.total.toLocaleString('id-ID')}</span>
+    </div>
+  `;
+  
+  if (txn.paymentMethod === 'Tunai') {
+    html += `
+      <div class="receipt-preview-line">
+        <span>Tunai</span>
+        <span>Rp ${txn.cash.toLocaleString('id-ID')}</span>
+      </div>
+      <div class="receipt-preview-line">
+        <span>Kembalian</span>
+        <span>Rp ${txn.change.toLocaleString('id-ID')}</span>
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="receipt-preview-line">
+        <span>Metode Bayar</span>
+        <span>${txn.paymentMethod}</span>
+      </div>
+    `;
+  }
+  
+  html += `
+    <div class="receipt-preview-divider"></div>
+    <div class="receipt-preview-center" style="margin-top: 10px; font-style: italic;">
+      Terima Kasih<br>Silakan Datang Kembali
+    </div>
+  `;
+  
+  return html;
+}
+
+function openReceiptModal(txn) {
+  currentTxnForReceipt = txn;
+  
+  const contentEl = document.getElementById('receipt-preview-content');
+  if (contentEl) {
+    contentEl.innerHTML = generateReceiptHTML(txn);
+  }
+  
+  const modal = document.getElementById('receipt-modal-overlay');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+function closeReceiptModal() {
+  const modal = document.getElementById('receipt-modal-overlay');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  currentTxnForReceipt = null;
+}
+
+function printReceiptFromModal(type) {
+  if (!currentTxnForReceipt) return;
+  if (type === 'bluetooth') {
+    printReceiptBluetooth(currentTxnForReceipt);
+  } else {
+    printReceiptBrowser(currentTxnForReceipt);
+  }
+}
+
 // --- Date display ---
 function updateDateDisplay() {
   const el = document.getElementById('current-date');
@@ -3217,6 +3971,19 @@ function updateDateDisplay() {
 // --- Initialize ---
 function init() {
   loadData();
+  
+  if (!state.isSetup) {
+    document.getElementById('welcome-overlay').classList.remove('hidden');
+    document.getElementById('app-container').classList.add('hidden');
+    document.getElementById('setup-shop-name').value = state.shopName;
+    document.getElementById('setup-token-bos').value = state.token;
+  } else {
+    document.getElementById('welcome-overlay').classList.add('hidden');
+    document.getElementById('app-container').classList.remove('hidden');
+    document.getElementById('shop-title-display').textContent = state.shopName;
+    applyRoleRestrictions();
+  }
+
   updateDateDisplay();
   renderCategories();
   renderMenuGrid();

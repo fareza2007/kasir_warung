@@ -1654,7 +1654,7 @@ body::before {
   max-width: 400px;
   background: var(--accent-gradient);
   color: #000;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   padding: 12px 20px;
   display: flex;
   align-items: center;
@@ -1737,6 +1737,57 @@ body::before {
   font-weight: 700;
   color: var(--text-muted);
   margin-top: 12px;
+}
+
+/* --- Input Prefix --- */
+.input-with-prefix {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-prefix {
+  position: absolute;
+  left: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* --- Authentication Overlay --- */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.auth-overlay.hidden {
+  display: none;
+}
+.auth-container {
+  background: var(--bg-card);
+  padding: 30px;
+  border-radius: var(--radius-lg);
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+}
+.auth-logo {
+  font-size: 3rem;
+  margin-bottom: 10px;
+}
+.auth-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 20px;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* --- Responsive --- */
@@ -2025,6 +2076,9 @@ body::before {
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <!-- SheetJS for Excel export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <!-- Firebase Compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -2131,7 +2185,9 @@ body::before {
       <button class="btn btn-secondary btn-icon" id="btn-connect-printer" onclick="connectBluetoothPrinter()" title="Sambungkan Printer Bluetooth" style="padding: 8px 12px; gap: 6px; min-width: 40px;">
         🖨️ <span class="tab-text">Hubungkan Printer</span>
       </button>
-
+      <button class="btn btn-secondary" onclick="logout()" title="Keluar" id="btn-logout" style="margin-right:8px;">
+        🚪 <span class="tab-text">Keluar</span>
+      </button>
       <button class="btn btn-success" onclick="exportToExcel()" title="Export ke Excel">
         📥 <span class="tab-text">Export Excel</span>
       </button>
@@ -2146,6 +2202,7 @@ body::before {
       <div class="section-card">
         <div class="section-header">
           <h2 class="section-title"><span class="icon">🍽️</span> Daftar Menu</h2>
+          <button class="btn btn-secondary" onclick="showExpenseModal()" style="padding: 8px 12px; font-size: 0.85rem; border-color: var(--accent-primary); color: var(--accent-primary);">💸 Catat Pengeluaran</button>
         </div>
         <div class="category-filters" id="category-filters"></div>
         <div class="menu-grid" id="menu-grid"></div>
@@ -2305,6 +2362,59 @@ body::before {
   </div>
 </div>
 
+<!-- ===== AUTHENTICATION OVERLAY ===== -->
+<div class="auth-overlay hidden" id="auth-overlay">
+  <div class="auth-container">
+    <div class="auth-logo">🏪</div>
+    <h2 class="auth-title" id="auth-title">Memuat...</h2>
+    
+    <!-- Loading View -->
+    <div id="auth-loading-view">
+      <p style="color:var(--text-muted);">Menghubungkan ke server...</p>
+    </div>
+
+    <!-- Setup View -->
+    <div id="auth-setup-view" class="hidden">
+      <p style="margin-bottom: 20px; color: var(--text-secondary); font-size: 0.9rem;">Selamat datang! Sepertinya aplikasi kasir ini belum diatur. Silakan buat warung Anda terlebih dahulu.</p>
+      <div class="form-group" style="text-align: left;">
+        <label class="form-label">Nama Warung</label>
+        <input type="text" class="form-input" id="setup-warung-name" placeholder="cth: Warung Barokah">
+      </div>
+      <div class="form-group" style="text-align: left;">
+        <label class="form-label">Buat PIN Bos (Angka)</label>
+        <input type="password" class="form-input" id="setup-bos-pin" placeholder="cth: 123456" inputmode="numeric">
+      </div>
+      <button class="btn btn-primary" onclick="submitSetup()" style="width: 100%; margin-top: 10px;">🚀 Buat Warung Sekarang</button>
+    </div>
+
+    <!-- Login View -->
+    <div id="auth-login-view" class="hidden">
+      <p style="margin-bottom: 20px; color: var(--text-secondary); font-size: 0.9rem;">Silakan pilih peran untuk masuk ke dalam aplikasi kasir.</p>
+      
+      <div style="display:flex; gap:10px; margin-bottom: 20px;">
+        <button class="btn btn-secondary" id="tab-login-bos" onclick="setLoginTab('bos')" style="flex:1; border-color:var(--accent-primary); color:var(--accent-primary);">👤 Bos</button>
+        <button class="btn btn-secondary" id="tab-login-karyawan" onclick="setLoginTab('karyawan')" style="flex:1;">👨‍💼 Karyawan</button>
+      </div>
+
+      <div id="login-bos-form">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label">Masukkan PIN Bos</label>
+          <input type="password" class="form-input" id="login-bos-pin" placeholder="Masukkan PIN rahasia" inputmode="numeric">
+        </div>
+      </div>
+
+      <div id="login-karyawan-form" class="hidden">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label">Masukkan Token Karyawan</label>
+          <input type="text" class="form-input" id="login-karyawan-token" placeholder="cth: ABCDE" style="text-transform: uppercase;">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="submitLogin()" style="width: 100%; margin-top: 10px;">Masuk Aplikasi</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== RECEIPT PREVIEW MODAL ===== -->
 <div class="modal-overlay hidden" id="receipt-modal-overlay">
   <div class="modal" style="max-width: 400px;">
@@ -2334,6 +2444,36 @@ body::before {
   </div>
 </div>
 
+<!-- ===== EXPENSE MODAL ===== -->
+<div class="modal-overlay hidden" id="expense-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>💸 Catat Pengeluaran</h3>
+      <button class="btn-close" onclick="closeExpenseModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 0.85rem;">Catat uang keluar, misalnya untuk beli bahan baku, plastik, atau biaya tak terduga.</p>
+      
+      <div class="form-group">
+        <label class="form-label">Keterangan Pengeluaran</label>
+        <input type="text" id="expense-desc" class="form-input" placeholder="Contoh: Beli es batu & sedotan" autocomplete="off">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Nominal (Rp)</label>
+        <div class="input-with-prefix">
+          <span class="input-prefix">Rp</span>
+          <input type="number" id="expense-amount" class="form-input" placeholder="0" inputmode="numeric" style="padding-left: 45px;">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeExpenseModal()">Batal</button>
+      <button class="btn btn-primary" onclick="saveExpense()">Simpan Pengeluaran</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================
 // KASIR WARUNG - Application Logic
@@ -2346,21 +2486,21 @@ const DEFAULT_MENU = [];
 const firebaseConfig = {
   apiKey: "AIzaSyBRlpXDCFRzLLFh8D-RlMkwIj1-kO9MjcQ",
   authDomain: "kasir-warung-29a57.firebaseapp.com",
+  databaseURL: "https://kasir-warung-29a57-default-rtdb.firebaseio.com",
   projectId: "kasir-warung-29a57",
   storageBucket: "kasir-warung-29a57.firebasestorage.app",
   messagingSenderId: "474869518431",
-  appId: "1:474869518431:web:56f9e89758a773004a4bea",
-  measurementId: "G-HTEN7237CQ"
+  appId: "1:474869518431:web:bf88043be1f88f8c4a4bea"
 };
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-let unsubscribeSnapshot = null;
+const db = firebase.database();
 
 // --- App State ---
 const state = {
   menu: [],
   cart: [],
   transactions: [],
+  expenses: [],
   activeCategory: 'Semua',
   activePage: 'kasir',
   dashboardPeriod: 'hari',
@@ -2369,9 +2509,8 @@ const state = {
   
   // Setup & Role State
   shopName: 'Kasir Warung',
-  role: 'Bos',
-  token: 'KASIR123',
-  isSetup: false,
+  role: null,
+  token: null,
 };
 
 // --- Helper Functions ---
@@ -2398,84 +2537,200 @@ function getCategories() {
   return ['Semua', ...cats];
 }
 
-// --- Data Storage (Local & Firebase) ---
+// --- Firebase Data Synchronization ---
 function saveData() {
-  localStorage.setItem('kasir_menu', JSON.stringify(state.menu));
-  localStorage.setItem('kasir_transactions', JSON.stringify(state.transactions));
-  localStorage.setItem('kasir_nextMenuId', state.nextMenuId);
-  localStorage.setItem('kasir_nextTxnId', state.nextTxnId);
+  if (!state.token) return;
   
-  localStorage.setItem('kasir_shopName', state.shopName);
-  localStorage.setItem('kasir_role', state.role);
-  localStorage.setItem('kasir_token', state.token);
-  localStorage.setItem('kasir_isSetup', state.isSetup ? 'true' : 'false');
-
-  if (state.isSetup && state.token) {
-    db.collection('shops').doc(state.token).set({
-      shopName: state.shopName,
-      menu: state.menu,
-      transactions: state.transactions,
-      nextMenuId: state.nextMenuId,
-      nextTxnId: state.nextTxnId,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true })
-    .catch(err => console.error("Firebase save error:", err));
-  }
+  db.ref('shops/' + state.token).set({
+    shopName: state.shopName,
+    menu: state.menu || [],
+    transactions: state.transactions || [],
+    expenses: state.expenses || [],
+    nextMenuId: state.nextMenuId,
+    nextTxnId: state.nextTxnId
+  }).catch(err => console.error("Firebase save error:", err));
 }
 
 function syncFromFirebase() {
-  if (!state.token || !state.isSetup) return;
+  if (!state.token) return;
   
-  if (unsubscribeSnapshot) {
-    unsubscribeSnapshot();
-  }
-
-  unsubscribeSnapshot = db.collection('shops').doc(state.token).onSnapshot((doc) => {
-    if (doc.exists) {
-      const data = doc.data();
+  db.ref('shops/' + state.token).on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
       state.shopName = data.shopName || state.shopName;
       state.menu = data.menu || [];
       state.transactions = data.transactions || [];
+      state.expenses = data.expenses || [];
       state.nextMenuId = data.nextMenuId || 100;
       state.nextTxnId = data.nextTxnId || 1;
       
-      // Save local backup when Firebase updates
-      localStorage.setItem('kasir_menu', JSON.stringify(state.menu));
-      localStorage.setItem('kasir_transactions', JSON.stringify(state.transactions));
-      localStorage.setItem('kasir_shopName', state.shopName);
-      localStorage.setItem('kasir_nextMenuId', state.nextMenuId);
-      localStorage.setItem('kasir_nextTxnId', state.nextTxnId);
-      
-      // Update UI if needed
-      const shopTitle = document.getElementById('shop-title-display');
+      const shopTitle = document.querySelector('.app-logo h1');
       if (shopTitle) shopTitle.textContent = state.shopName;
       
       if (typeof renderCategories === 'function') renderCategories();
       if (typeof renderMenuGrid === 'function') renderMenuGrid();
       if (typeof renderHistory === 'function') renderHistory();
       if (state.activePage === 'keuangan' && typeof renderDashboard === 'function') renderDashboard();
-      if (state.activePage === 'kelola-menu' && typeof renderMenuManage === 'function') renderMenuManage();
+      if (state.activePage === 'menu' && typeof renderMenuManage === 'function') renderMenuManage();
     }
-  }, (err) => {
-    console.error("Firebase sync error:", err);
   });
 }
 
-function loadData() {
-  const menu = localStorage.getItem('kasir_menu');
-  const txns = localStorage.getItem('kasir_transactions');
-  const nextMenuId = localStorage.getItem('kasir_nextMenuId');
-  const nextTxnId = localStorage.getItem('kasir_nextTxnId');
+// --- Auth & Setup Logic ---
+function generateToken() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let token = '';
+  for(let i=0; i<6; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
+  return token;
+}
 
-  state.menu = menu ? JSON.parse(menu) : [...DEFAULT_MENU];
-  state.transactions = txns ? JSON.parse(txns) : [];
-  state.nextMenuId = nextMenuId ? parseInt(nextMenuId) : 100;
-  state.nextTxnId = nextTxnId ? parseInt(nextTxnId) : 1;
+function checkAuth() {
+  const sessionToken = sessionStorage.getItem('session_token');
+  const sessionRole = sessionStorage.getItem('session_role');
+  const overlay = document.getElementById('auth-overlay');
+  
+  if (sessionToken && sessionRole) {
+    // Already logged in
+    state.token = sessionToken;
+    state.role = sessionRole;
+    overlay.classList.add('hidden');
+    syncFromFirebase();
+    applyRoleRestrictions();
+  } else {
+    // Show login overlay
+    overlay.classList.remove('hidden');
+    document.getElementById('auth-loading-view').classList.remove('hidden');
+    
+    // Check if any shop exists to determine Setup vs Login
+    db.ref('shops').once('value').then(snapshot => {
+      document.getElementById('auth-loading-view').classList.add('hidden');
+      if (snapshot.exists()) {
+        // Show Login
+        document.getElementById('auth-title').textContent = 'Masuk Aplikasi';
+        document.getElementById('auth-login-view').classList.remove('hidden');
+        setLoginTab('bos');
+      } else {
+        // Show Setup
+        document.getElementById('auth-title').textContent = 'Atur Warung Baru';
+        document.getElementById('auth-setup-view').classList.remove('hidden');
+      }
+    }).catch(err => {
+      console.error(err);
+      alert("Gagal menghubungi server. Pastikan internet Anda jalan.");
+    });
+  }
+}
 
-  state.shopName = localStorage.getItem('kasir_shopName') || 'Kasir Warung';
-  state.role = localStorage.getItem('kasir_role') || 'Bos';
-  state.token = localStorage.getItem('kasir_token') || 'KASIR123';
-  state.isSetup = localStorage.getItem('kasir_isSetup') === 'true';
+function setLoginTab(role) {
+  if (role === 'bos') {
+    document.getElementById('tab-login-bos').style.borderColor = 'var(--accent-primary)';
+    document.getElementById('tab-login-bos').style.color = 'var(--accent-primary)';
+    document.getElementById('tab-login-karyawan').style.borderColor = 'var(--border)';
+    document.getElementById('tab-login-karyawan').style.color = 'var(--text-primary)';
+    document.getElementById('login-bos-form').classList.remove('hidden');
+    document.getElementById('login-karyawan-form').classList.add('hidden');
+  } else {
+    document.getElementById('tab-login-karyawan').style.borderColor = 'var(--accent-primary)';
+    document.getElementById('tab-login-karyawan').style.color = 'var(--accent-primary)';
+    document.getElementById('tab-login-bos').style.borderColor = 'var(--border)';
+    document.getElementById('tab-login-bos').style.color = 'var(--text-primary)';
+    document.getElementById('login-karyawan-form').classList.remove('hidden');
+    document.getElementById('login-bos-form').classList.add('hidden');
+  }
+}
+
+function submitSetup() {
+  const name = document.getElementById('setup-warung-name').value.trim();
+  const pin = document.getElementById('setup-bos-pin').value.trim();
+  
+  if (!name || !pin) { alert("Nama warung dan PIN wajib diisi!"); return; }
+  
+  const token = generateToken();
+  
+  // Save credentials to a separate secure path
+  db.ref('credentials/' + token).set({ pin: pin }).then(() => {
+    state.shopName = name;
+    state.token = token;
+    state.role = 'Bos';
+    
+    saveData(); // Save initial empty shop
+    
+    sessionStorage.setItem('session_token', token);
+    sessionStorage.setItem('session_role', 'Bos');
+    
+    document.getElementById('auth-overlay').classList.add('hidden');
+    syncFromFirebase();
+    applyRoleRestrictions();
+    alert("Berhasil! Token karyawan Anda adalah: " + token + "\\nSimpan token ini untuk diberikan ke karyawan.");
+  });
+}
+
+function submitLogin() {
+  const isBos = !document.getElementById('login-bos-form').classList.contains('hidden');
+  
+  if (isBos) {
+    const pin = document.getElementById('login-bos-pin').value.trim();
+    if (!pin) { alert("Masukkan PIN!"); return; }
+    
+    // Check all credentials for matching PIN
+    db.ref('credentials').once('value').then(snapshot => {
+      let foundToken = null;
+      snapshot.forEach(child => {
+        if (child.val().pin === pin) {
+          foundToken = child.key;
+        }
+      });
+      
+      if (foundToken) {
+        state.token = foundToken;
+        state.role = 'Bos';
+        sessionStorage.setItem('session_token', foundToken);
+        sessionStorage.setItem('session_role', 'Bos');
+        document.getElementById('auth-overlay').classList.add('hidden');
+        syncFromFirebase();
+        applyRoleRestrictions();
+      } else {
+        alert("PIN salah!");
+      }
+    });
+  } else {
+    const token = document.getElementById('login-karyawan-token').value.trim().toUpperCase();
+    if (!token) { alert("Masukkan Token!"); return; }
+    
+    db.ref('shops/' + token).once('value').then(snapshot => {
+      if (snapshot.exists()) {
+        state.token = token;
+        state.role = 'Karyawan';
+        sessionStorage.setItem('session_token', token);
+        sessionStorage.setItem('session_role', 'Karyawan');
+        document.getElementById('auth-overlay').classList.add('hidden');
+        syncFromFirebase();
+        applyRoleRestrictions();
+      } else {
+        alert("Token tidak ditemukan!");
+      }
+    });
+  }
+}
+
+function applyRoleRestrictions() {
+  if (state.role === 'Karyawan') {
+    document.querySelector('.nav-tab[data-page="keuangan"]').style.display = 'none';
+    document.querySelector('.nav-tab[data-page="riwayat"]').style.display = 'none';
+    document.querySelector('.nav-tab[data-page="menu"]').style.display = 'none';
+    
+    if (state.activePage !== 'kasir') switchPage('kasir');
+  } else {
+    document.querySelector('.nav-tab[data-page="keuangan"]').style.display = 'flex';
+    document.querySelector('.nav-tab[data-page="riwayat"]').style.display = 'flex';
+    document.querySelector('.nav-tab[data-page="menu"]').style.display = 'flex';
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('session_token');
+  sessionStorage.removeItem('session_role');
+  window.location.reload();
 }
 
 // --- Navigation ---
@@ -2941,70 +3196,152 @@ function deleteTxn(txnId) {
   if (state.activePage === 'keuangan') renderDashboard();
 }
 
+function showAddExpenseModal() {
+  const modal = document.getElementById('modal-overlay');
+  document.getElementById('modal-title').textContent = 'Tambah Pengeluaran';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-group">
+      <input type="text" id="exp-desc" class="form-input" placeholder="Deskripsi Pengeluaran" required>
+      <input type="number" id="exp-amount" class="form-input" placeholder="Jumlah (Rp)" required style="margin-top:10px;">
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal()">Batal</button>
+    <button class="btn btn-primary" onclick="saveExpense()">Simpan</button>
+  `;
+  modal.classList.remove('hidden');
+}
+
+function saveExpense() {
+  const desc = document.getElementById('exp-desc').value;
+  const amount = parseInt(document.getElementById('exp-amount').value);
+  if (!desc || !amount) return alert('Isi data dengan lengkap');
+  
+  const expense = {
+    id: Date.now(),
+    desc,
+    amount,
+    date: new Date().toISOString().split('T')[0],
+    timestamp: new Date().toISOString()
+  };
+  
+  state.expenses = state.expenses || [];
+  state.expenses.push(expense);
+  saveData();
+  closeModal();
+  if (state.activePage === 'keuangan') renderDashboard();
+}
+
 function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
 }
 
-// --- Dashboard / Keuangan ---
+// --- Dashboard & Finances ---
 function renderDashboard() {
   const period = state.dashboardPeriod;
   const now = new Date();
-  let filtered = [];
-  let periodLabel = '';
-
+  
+  let filteredTxns = [];
+  let filteredExpenses = [];
+  
   if (period === 'hari') {
-    const today = getTodayStr();
-    filtered = state.transactions.filter(t => t.date.split('T')[0] === today);
-    periodLabel = 'Hari Ini';
+    const today = new Date().toISOString().split('T')[0];
+    filteredTxns = state.transactions.filter(t => t.date.split('T')[0] === today);
+    filteredExpenses = (state.expenses || []).filter(e => e.date === today);
   } else if (period === 'minggu') {
-    const weekAgo = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    filtered = state.transactions.filter(t => new Date(t.date) >= weekAgo);
-    periodLabel = '7 Hari Terakhir';
+    const lastWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+    filteredTxns = state.transactions.filter(t => new Date(t.date) >= lastWeek);
+    filteredExpenses = (state.expenses || []).filter(e => new Date(e.timestamp) >= lastWeek);
   } else if (period === 'bulan') {
-    const monthAgo = new Date(now);
-    monthAgo.setMonth(monthAgo.getMonth() - 1);
-    filtered = state.transactions.filter(t => new Date(t.date) >= monthAgo);
-    periodLabel = '30 Hari Terakhir';
-  } else if (period === 'semua') {
-    filtered = [...state.transactions];
-    periodLabel = 'Semua Waktu';
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    filteredTxns = state.transactions.filter(t => new Date(t.date) >= startOfMonth);
+    filteredExpenses = (state.expenses || []).filter(e => new Date(e.timestamp) >= startOfMonth);
+  } else {
+    filteredTxns = [...state.transactions];
+    filteredExpenses = [...(state.expenses || [])];
   }
 
-  const totalIncome = filtered.reduce((s, t) => s + t.total, 0);
-  const txnCount = filtered.length;
-  const avgTxn = txnCount > 0 ? Math.round(totalIncome / txnCount) : 0;
+  // Calculate values
+  const totalIncome = filteredTxns.reduce((sum, t) => sum + t.total, 0);
+  const totalExpense = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const netProfit = totalIncome - totalExpense;
 
-  // Count items sold
-  const itemsSold = filtered.reduce((s, t) => s + t.items.reduce((a, i) => a + i.qty, 0), 0);
+  // Render Income Cards
+  const statsContainer = document.getElementById('dashboard-stats');
+  if (statsContainer) {
+    statsContainer.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Pemasukan</div>
+        <div class="stat-value text-success">${formatRupiah(totalIncome)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pengeluaran</div>
+        <div class="stat-value text-danger">${formatRupiah(totalExpense)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Laba Bersih</div>
+        <div class="stat-value ${netProfit >= 0 ? 'text-success' : 'text-danger'}">${formatRupiah(netProfit)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Transaksi</div>
+        <div class="stat-value">${filteredTxns.length}</div>
+      </div>
+    `;
+  }
 
-  // Update stat cards
-  document.getElementById('stat-income').textContent = formatRupiah(totalIncome);
-  document.getElementById('stat-income-sub').textContent = periodLabel;
-  document.getElementById('stat-txn').textContent = txnCount;
-  document.getElementById('stat-txn-sub').textContent = periodLabel;
-  document.getElementById('stat-avg').textContent = formatRupiah(avgTxn);
-  document.getElementById('stat-avg-sub').textContent = 'per transaksi';
-  document.getElementById('stat-items').textContent = itemsSold;
-  document.getElementById('stat-items-sub').textContent = 'item terjual';
-
-  // Update period buttons
-  document.querySelectorAll('.period-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.period === period);
-  });
-
-  // Render charts
-  renderIncomeChart(filtered, period);
-  renderTopItemsChart(filtered);
-  renderTopItemsTable(filtered);
+  // Render charts and list
+  renderIncomeChart(filteredTxns, period);
+  renderExpenseList(filteredExpenses);
+  renderTopItemsChart(filteredTxns);
+  renderTopItemsTable(filteredTxns);
 }
 
 // Chart instances
 let incomeChartInstance = null;
 let topItemsChartInstance = null;
 
+function renderExpenseList(expenses) {
+  let listEl = document.getElementById('expense-list-container');
+  
+  if (!listEl) {
+    const chartsWrap = document.querySelector('.dashboard-charts');
+    if (chartsWrap) {
+      const containerHTML = `
+        <div class="section-card" style="margin-top: 20px;">
+          <div class="section-header">
+            <h2 class="section-title"><span class="icon">💸</span> Daftar Pengeluaran</h2>
+          </div>
+          <div id="expense-list-container" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+      `;
+      chartsWrap.insertAdjacentHTML('afterend', containerHTML);
+      listEl = document.getElementById('expense-list-container');
+    }
+  }
+  
+  if (!listEl) return;
+  
+  if (expenses.length === 0) {
+    listEl.innerHTML = `<div class="cart-empty" style="padding: 20px;"><p>Belum ada pengeluaran.</p></div>`;
+    return;
+  }
+  
+  const sorted = [...expenses].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  listEl.innerHTML = sorted.map(e => `
+    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card-hover); padding:12px; border-radius:var(--radius-md); border:1px solid var(--border);">
+      <div>
+        <div style="font-weight:600; font-size:1rem; margin-bottom:4px;">${e.desc}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${formatDate(e.date)} - ${formatTime(e.timestamp)}</div>
+      </div>
+      <div style="font-weight:700; color:var(--text-danger);">${formatRupiah(e.amount)}</div>
+    </div>
+  `).join('');
+}
+
 function renderIncomeChart(transactions, period) {
-  const ctx = document.getElementById('income-chart').getContext('2d');
+  const ctx = document.getElementById('income-chart')?.getContext('2d');
+  if (!ctx) return;
 
   if (incomeChartInstance) incomeChartInstance.destroy();
 
@@ -3015,10 +3352,8 @@ function renderIncomeChart(transactions, period) {
     grouped[dateKey] = (grouped[dateKey] || 0) + t.total;
   });
 
-  // Sort dates
   const dates = Object.keys(grouped).sort();
-
-  // If daily, show last 7 days regardless
+  
   let labels, data;
   if (period === 'hari') {
     const today = new Date();
@@ -3039,7 +3374,6 @@ function renderIncomeChart(transactions, period) {
     data = dates.map(d => grouped[d]);
   }
 
-  // If no data
   if (data.length === 0) {
     labels = ['Tidak ada data'];
     data = [0];
@@ -3061,20 +3395,7 @@ function renderIncomeChart(transactions, period) {
           gradient.addColorStop(1, 'rgba(251, 146, 60, 0.8)');
           return gradient;
         },
-        borderColor: 'rgba(245, 158, 11, 0.9)',
-        borderWidth: 1,
         borderRadius: 6,
-        borderSkipped: false,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#22222e',
-          titleColor: '#f1f1f5',
           bodyColor: '#9a9ab0',
           borderColor: 'rgba(255,255,255,0.1)',
           borderWidth: 1,
@@ -4052,22 +4373,45 @@ function updateDateDisplay() {
   }
 }
 
+// --- Expenses Logic ---
+function showExpenseModal() {
+  document.getElementById('expense-modal-overlay').classList.remove('hidden');
+  document.getElementById('expense-desc').value = '';
+  document.getElementById('expense-amount').value = '';
+}
+
+function closeExpenseModal() {
+  document.getElementById('expense-modal-overlay').classList.add('hidden');
+}
+
+function saveExpense() {
+  const desc = document.getElementById('expense-desc').value.trim();
+  const amountStr = document.getElementById('expense-amount').value.trim();
+  const amount = parseInt(amountStr, 10);
+  
+  if (!desc) { alert('Masukkan keterangan pengeluaran!'); return; }
+  if (!amount || isNaN(amount) || amount <= 0) { alert('Nominal tidak valid!'); return; }
+  
+  const now = new Date();
+  const expense = {
+    id: Date.now(),
+    desc: desc,
+    amount: amount,
+    date: getTodayStr(),
+    timestamp: now.toISOString(),
+  };
+  
+  state.expenses.push(expense);
+  saveData();
+  
+  closeExpenseModal();
+  alert('Pengeluaran berhasil dicatat!');
+}
+
 // --- Initialize ---
 function init() {
-  loadData();
-  
-  if (!state.isSetup) {
-    document.getElementById('welcome-overlay').classList.remove('hidden');
-    document.getElementById('app-container').classList.add('hidden');
-    document.getElementById('setup-shop-name').value = state.shopName;
-    document.getElementById('setup-token-bos').value = state.token;
-  } else {
-    document.getElementById('welcome-overlay').classList.add('hidden');
-    document.getElementById('app-container').classList.remove('hidden');
-    document.getElementById('shop-title-display').textContent = state.shopName;
-    applyRoleRestrictions();
-    syncFromFirebase();
-  }
+  // Start the Auth / Firebase flow
+  checkAuth();
 
   updateDateDisplay();
   renderCategories();

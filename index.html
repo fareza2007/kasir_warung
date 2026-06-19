@@ -2018,6 +2018,9 @@ body::before {
 
 
 </style>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <!-- Chart.js for graphics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <!-- SheetJS for Excel export -->
@@ -2034,7 +2037,7 @@ body::before {
     
     <div class="welcome-form">
       <!-- Step 1: Shop Name -->
-      <div class="form-group">
+      <div class="form-group" id="setup-shop-name-group">
         <label class="form-label">Nama Warung / Toko</label>
         <input type="text" class="form-input" id="setup-shop-name" placeholder="cth: Warung Jaya Makmur" value="Kasir Warung">
       </div>
@@ -2339,6 +2342,20 @@ body::before {
 // --- Default Menu Data ---
 const DEFAULT_MENU = [];
 
+// --- Firebase Config ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBRlpXDCFRzLLFh8D-RlMkwIj1-kO9MjcQ",
+  authDomain: "kasir-warung-29a57.firebaseapp.com",
+  projectId: "kasir-warung-29a57",
+  storageBucket: "kasir-warung-29a57.firebasestorage.app",
+  messagingSenderId: "474869518431",
+  appId: "1:474869518431:web:56f9e89758a773004a4bea",
+  measurementId: "G-HTEN7237CQ"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+let unsubscribeSnapshot = null;
+
 // --- App State ---
 const state = {
   menu: [],
@@ -2381,7 +2398,7 @@ function getCategories() {
   return ['Semua', ...cats];
 }
 
-// --- LocalStorage ---
+// --- Data Storage (Local & Firebase) ---
 function saveData() {
   localStorage.setItem('kasir_menu', JSON.stringify(state.menu));
   localStorage.setItem('kasir_transactions', JSON.stringify(state.transactions));
@@ -2392,6 +2409,56 @@ function saveData() {
   localStorage.setItem('kasir_role', state.role);
   localStorage.setItem('kasir_token', state.token);
   localStorage.setItem('kasir_isSetup', state.isSetup ? 'true' : 'false');
+
+  if (state.isSetup && state.token) {
+    db.collection('shops').doc(state.token).set({
+      shopName: state.shopName,
+      menu: state.menu,
+      transactions: state.transactions,
+      nextMenuId: state.nextMenuId,
+      nextTxnId: state.nextTxnId,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true })
+    .catch(err => console.error("Firebase save error:", err));
+  }
+}
+
+function syncFromFirebase() {
+  if (!state.token || !state.isSetup) return;
+  
+  if (unsubscribeSnapshot) {
+    unsubscribeSnapshot();
+  }
+
+  unsubscribeSnapshot = db.collection('shops').doc(state.token).onSnapshot((doc) => {
+    if (doc.exists) {
+      const data = doc.data();
+      state.shopName = data.shopName || state.shopName;
+      state.menu = data.menu || [];
+      state.transactions = data.transactions || [];
+      state.nextMenuId = data.nextMenuId || 100;
+      state.nextTxnId = data.nextTxnId || 1;
+      
+      // Save local backup when Firebase updates
+      localStorage.setItem('kasir_menu', JSON.stringify(state.menu));
+      localStorage.setItem('kasir_transactions', JSON.stringify(state.transactions));
+      localStorage.setItem('kasir_shopName', state.shopName);
+      localStorage.setItem('kasir_nextMenuId', state.nextMenuId);
+      localStorage.setItem('kasir_nextTxnId', state.nextTxnId);
+      
+      // Update UI if needed
+      const shopTitle = document.getElementById('shop-title-display');
+      if (shopTitle) shopTitle.textContent = state.shopName;
+      
+      if (typeof renderCategories === 'function') renderCategories();
+      if (typeof renderMenuGrid === 'function') renderMenuGrid();
+      if (typeof renderHistory === 'function') renderHistory();
+      if (state.activePage === 'keuangan' && typeof renderDashboard === 'function') renderDashboard();
+      if (state.activePage === 'kelola-menu' && typeof renderMenuManage === 'function') renderMenuManage();
+    }
+  }, (err) => {
+    console.error("Firebase sync error:", err);
+  });
 }
 
 function loadData() {
@@ -3497,9 +3564,11 @@ function selectSetupRole(role) {
   document.getElementById('role-karyawan').classList.toggle('active', role === 'Karyawan');
   
   if (role === 'Bos') {
+    document.getElementById('setup-shop-name-group').style.display = 'block';
     document.getElementById('setup-token-bos-group').style.display = 'block';
     document.getElementById('setup-token-karyawan-group').style.display = 'none';
   } else {
+    document.getElementById('setup-shop-name-group').style.display = 'none';
     document.getElementById('setup-token-bos-group').style.display = 'none';
     document.getElementById('setup-token-karyawan-group').style.display = 'block';
   }
@@ -3514,14 +3583,14 @@ function generateRandomToken() {
   document.getElementById('setup-token-bos').value = randToken;
 }
 
-function saveSetup() {
+async function saveSetup() {
   const shopNameInput = document.getElementById('setup-shop-name').value.trim();
-  if (!shopNameInput) {
-    alert('Nama Warung / Toko tidak boleh kosong!');
-    return;
-  }
   
   if (selectedRole === 'Bos') {
+    if (!shopNameInput) {
+      alert('Nama Warung / Toko tidak boleh kosong!');
+      return;
+    }
     const tokenInput = document.getElementById('setup-token-bos').value.trim();
     if (!tokenInput) {
       alert('Token Karyawan tidak boleh kosong!');
@@ -3531,25 +3600,41 @@ function saveSetup() {
     state.role = 'Bos';
     state.token = tokenInput;
     state.isSetup = true;
+    
+    saveData();
+    syncFromFirebase();
+    finishSetup();
   } else {
     const enteredToken = document.getElementById('setup-token-karyawan').value.trim();
     if (!enteredToken) {
-      alert('Harap masukkan Token Karyawan!');
+      alert('Harap masukkan Kode Karyawan!');
       return;
     }
     
-    // Token diterima langsung sebagai identitas karyawan.
-    // Karena aplikasi ini tanpa server/database, token tidak bisa
-    // divalidasi antar perangkat. Pembatasan akses (Keuangan & Riwayat
-    // tersembunyi) adalah keamanan utamanya.
-    state.shopName = shopNameInput;
-    state.role = 'Karyawan';
-    state.token = enteredToken;
-    state.isSetup = true;
+    // Validasi token dari Firebase
+    try {
+      const doc = await db.collection('shops').doc(enteredToken).get();
+      if (doc.exists) {
+        const data = doc.data();
+        state.shopName = data.shopName;
+        state.role = 'Karyawan';
+        state.token = enteredToken;
+        state.isSetup = true;
+        
+        saveData(); // Save locally
+        syncFromFirebase(); // Start real-time sync
+        finishSetup();
+      } else {
+        alert('Kode Karyawan tidak ditemukan! Pastikan Bos sudah mengatur warung dan internet terhubung.');
+      }
+    } catch (error) {
+      console.error("Error checking token:", error);
+      alert('Gagal mengecek kode karyawan. Pastikan internet terhubung.');
+    }
   }
-  
-  saveData();
-  
+}
+
+function finishSetup() {
   document.getElementById('welcome-overlay').classList.add('hidden');
   document.getElementById('app-container').classList.remove('hidden');
   document.getElementById('shop-title-display').textContent = state.shopName;
@@ -3564,14 +3649,16 @@ function saveSetup() {
 }
 
 function resetSetup() {
-  if (confirm('Apakah Anda yakin ingin keluar dan mengganti peran / nama warung?')) {
+  if (confirm('Ganti peran? Data menu dan transaksi tetap tersimpan.')) {
+    // Hanya reset peran, BUKAN data menu/transaksi
     state.isSetup = false;
-    localStorage.removeItem('kasir_isSetup');
-    localStorage.removeItem('kasir_role');
+    localStorage.setItem('kasir_isSetup', 'false');
+    // Jangan hapus kasir_role agar token bos tetap tersimpan
     
     document.getElementById('welcome-overlay').classList.remove('hidden');
     document.getElementById('app-container').classList.add('hidden');
     
+    // Pre-fill dengan data yang sudah ada
     document.getElementById('setup-shop-name').value = state.shopName;
     selectSetupRole('Bos');
     document.getElementById('setup-token-bos').value = state.token;
@@ -3979,6 +4066,7 @@ function init() {
     document.getElementById('app-container').classList.remove('hidden');
     document.getElementById('shop-title-display').textContent = state.shopName;
     applyRoleRestrictions();
+    syncFromFirebase();
   }
 
   updateDateDisplay();

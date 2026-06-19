@@ -2076,6 +2076,12 @@ body::before {
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <!-- SheetJS for Excel export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script>
+    window.onerror = function(msg, url, line, col, error) {
+      alert("Error: " + msg + "\nLine: " + line);
+      return false;
+    };
+  </script>
 </head>
 <body>
 
@@ -3309,7 +3315,12 @@ function renderIncomeChart(transactions, period) {
           gradient.addColorStop(1, 'rgba(251, 146, 60, 0.8)');
           return gradient;
         },
-        borderRadius: 6,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      plugins: {
+        tooltip: {
           bodyColor: '#9a9ab0',
           borderColor: 'rgba(255,255,255,0.1)',
           borderWidth: 1,
@@ -3834,11 +3845,29 @@ async function saveSetup() {
     state.shopName = shopNameInput;
     state.role = 'Bos';
     state.token = tokenInput;
-    state.isSetup = true;
     
-    saveData();
-    syncFromFirebase();
-    finishSetup();
+    try {
+      // Cek apakah token sudah ada (Bos sedang login ulang)
+      const doc = await db.collection('shops').doc(tokenInput).get();
+      if (doc.exists) {
+        const data = doc.data();
+        state.shopName = data.shopName; // Gunakan nama dari database
+        state.isSetup = true;
+        saveData(); // Save locally
+        syncFromFirebase();
+        finishSetup();
+      } else {
+        // Bos membuat warung baru
+        state.shopName = shopNameInput;
+        state.isSetup = true;
+        saveData(); // Save locally and create in Firebase
+        syncFromFirebase();
+        finishSetup();
+      }
+    } catch (error) {
+      console.error("Error checking token for Bos:", error);
+      alert('Gagal menghubungi server. Error: ' + error.message);
+    }
   } else {
     const enteredToken = document.getElementById('setup-token-karyawan').value.trim();
     if (!enteredToken) {

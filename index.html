@@ -2065,8 +2065,15 @@ body::before {
     border-top: 1px dashed #000000 !important;
   }
 }
+.hide-mobile {
+  display: inline;
+}
 
-
+@media (max-width: 600px) {
+  .hide-mobile {
+    display: none;
+  }
+}
 
 </style>
   <!-- Firebase SDK -->
@@ -2181,19 +2188,17 @@ body::before {
         <span class="badge-token-info" id="token-badge-text" title="Token Karyawan. Klik untuk salin" onclick="copyEmployeeToken()">Token: KASIR123 📋</span>
       </div>
       
-      <button class="btn btn-secondary btn-icon" onclick="resetSetup()" title="Keluar / Ganti Akun" style="padding: 8px 12px; min-width: 40px;">
-        ↩️
-      </button>
-
-      <button class="btn btn-secondary btn-icon" id="btn-connect-printer" onclick="connectBluetoothPrinter()" title="Sambungkan Printer Bluetooth" style="padding: 8px 12px; gap: 6px; min-width: 40px;">
-        🖨️ <span class="tab-text">Hubungkan Printer</span>
-      </button>
-      <button class="btn btn-secondary" onclick="logout()" title="Keluar" id="btn-logout" style="margin-right:8px;">
-        🚪 <span class="tab-text">Keluar</span>
-      </button>
-      <button class="btn btn-success" onclick="exportToExcel()" title="Export ke Excel">
-        📥 <span class="tab-text">Export Excel</span>
-      </button>
+      <div class="header-buttons" style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary btn-icon" id="btn-connect-printer" onclick="connectBluetoothPrinter()" title="Sambungkan Printer Bluetooth" style="padding: 8px 12px; min-width: 40px; display: flex; align-items: center; gap: 6px;">
+          🖨️ <span class="hide-mobile">Printer</span>
+        </button>
+        <button class="btn btn-success btn-icon" onclick="exportToExcel()" title="Export ke Excel" style="padding: 8px 12px; min-width: 40px; display: flex; align-items: center; gap: 6px;">
+          📥 <span class="hide-mobile">Excel</span>
+        </button>
+        <button class="btn btn-secondary btn-icon" onclick="logout()" title="Keluar" id="btn-logout" style="padding: 8px 12px; min-width: 40px; display: flex; align-items: center; gap: 6px;">
+          🚪 <span class="hide-mobile">Keluar</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -2648,9 +2653,12 @@ function applyRoleRestrictions() {
 }
 
 function logout() {
-  sessionStorage.removeItem('session_token');
-  sessionStorage.removeItem('session_role');
-  window.location.reload();
+  if (confirm('Yakin ingin keluar?')) {
+    localStorage.removeItem('kasir_isSetup');
+    localStorage.removeItem('kasir_token');
+    localStorage.removeItem('kasir_role');
+    window.location.reload();
+  }
 }
 
 // --- Navigation ---

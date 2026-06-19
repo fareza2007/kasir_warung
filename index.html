@@ -2076,9 +2076,6 @@ body::before {
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <!-- SheetJS for Excel export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <!-- Firebase Compat SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -2486,14 +2483,21 @@ const DEFAULT_MENU = [];
 const firebaseConfig = {
   apiKey: "AIzaSyBRlpXDCFRzLLFh8D-RlMkwIj1-kO9MjcQ",
   authDomain: "kasir-warung-29a57.firebaseapp.com",
-  databaseURL: "https://kasir-warung-29a57-default-rtdb.firebaseio.com",
   projectId: "kasir-warung-29a57",
   storageBucket: "kasir-warung-29a57.firebasestorage.app",
   messagingSenderId: "474869518431",
   appId: "1:474869518431:web:bf88043be1f88f8c4a4bea"
 };
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+let db = null;
+let unsubscribeSnapshot = null;
+
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+} catch (e) {
+  console.error("Firebase init failed:", e);
+  alert("Sistem database gagal dimuat. Pastikan Anda terhubung ke internet dan tidak menggunakan AdBlocker yang ketat.");
+}
 
 // --- App State ---
 const state = {
@@ -2537,181 +2541,91 @@ function getCategories() {
   return ['Semua', ...cats];
 }
 
-// --- Firebase Data Synchronization ---
-function saveData() {
-  if (!state.token) return;
+// --- Data Storage (Local & Firebase) ---
+function loadData() {
+  const localMenu = localStorage.getItem('kasir_menu');
+  const localTxns = localStorage.getItem('kasir_transactions');
+  const localNextMenuId = localStorage.getItem('kasir_nextMenuId');
+  const localNextTxnId = localStorage.getItem('kasir_nextTxnId');
+  const localShopName = localStorage.getItem('kasir_shopName');
+  const localRole = localStorage.getItem('kasir_role');
+  const localToken = localStorage.getItem('kasir_token');
+  const localIsSetup = localStorage.getItem('kasir_isSetup');
   
-  db.ref('shops/' + state.token).set({
-    shopName: state.shopName,
-    menu: state.menu || [],
-    transactions: state.transactions || [],
-    expenses: state.expenses || [],
-    nextMenuId: state.nextMenuId,
-    nextTxnId: state.nextTxnId
-  }).catch(err => console.error("Firebase save error:", err));
+  if (localMenu) state.menu = JSON.parse(localMenu);
+  if (localTxns) state.transactions = JSON.parse(localTxns);
+  if (localNextMenuId) state.nextMenuId = parseInt(localNextMenuId);
+  if (localNextTxnId) state.nextTxnId = parseInt(localNextTxnId);
+  
+  if (localShopName) state.shopName = localShopName;
+  if (localRole) state.role = localRole;
+  if (localToken) state.token = localToken;
+  if (localIsSetup) state.isSetup = localIsSetup === 'true';
+}
+
+function saveData() {
+  localStorage.setItem('kasir_menu', JSON.stringify(state.menu));
+  localStorage.setItem('kasir_transactions', JSON.stringify(state.transactions));
+  localStorage.setItem('kasir_nextMenuId', state.nextMenuId);
+  localStorage.setItem('kasir_nextTxnId', state.nextTxnId);
+  
+  localStorage.setItem('kasir_shopName', state.shopName);
+  localStorage.setItem('kasir_role', state.role);
+  localStorage.setItem('kasir_token', state.token);
+  localStorage.setItem('kasir_isSetup', state.isSetup ? 'true' : 'false');
+
+  if (state.isSetup && state.token && db) {
+    db.collection('shops').doc(state.token).set({
+      shopName: state.shopName,
+      menu: state.menu,
+      transactions: state.transactions,
+      nextMenuId: state.nextMenuId,
+      nextTxnId: state.nextTxnId,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true })
+    .catch(err => console.error("Firebase save error:", err));
+  }
 }
 
 function syncFromFirebase() {
-  if (!state.token) return;
+  if (!state.token || !state.isSetup || !db) return;
   
-  db.ref('shops/' + state.token).on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
+  if (unsubscribeSnapshot) {
+    unsubscribeSnapshot();
+  }
+
+  unsubscribeSnapshot = db.collection('shops').doc(state.token).onSnapshot((doc) => {
+    if (doc.exists) {
+      const data = doc.data();
       state.shopName = data.shopName || state.shopName;
       state.menu = data.menu || [];
       state.transactions = data.transactions || [];
-      state.expenses = data.expenses || [];
       state.nextMenuId = data.nextMenuId || 100;
       state.nextTxnId = data.nextTxnId || 1;
       
-      const shopTitle = document.querySelector('.app-logo h1');
+      // Save local backup when Firebase updates
+      localStorage.setItem('kasir_menu', JSON.stringify(state.menu));
+      localStorage.setItem('kasir_transactions', JSON.stringify(state.transactions));
+      localStorage.setItem('kasir_shopName', state.shopName);
+      localStorage.setItem('kasir_nextMenuId', state.nextMenuId);
+      localStorage.setItem('kasir_nextTxnId', state.nextTxnId);
+      
+      // Update UI if needed
+      const shopTitle = document.getElementById('shop-title-display');
       if (shopTitle) shopTitle.textContent = state.shopName;
       
       if (typeof renderCategories === 'function') renderCategories();
       if (typeof renderMenuGrid === 'function') renderMenuGrid();
       if (typeof renderHistory === 'function') renderHistory();
       if (state.activePage === 'keuangan' && typeof renderDashboard === 'function') renderDashboard();
-      if (state.activePage === 'menu' && typeof renderMenuManage === 'function') renderMenuManage();
+      if (state.activePage === 'kelola-menu' && typeof renderMenuManage === 'function') renderMenuManage();
     }
+  }, (err) => {
+    console.error("Firebase sync error:", err);
   });
 }
 
-// --- Auth & Setup Logic ---
-function generateToken() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let token = '';
-  for(let i=0; i<6; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
-  return token;
-}
 
-function checkAuth() {
-  const sessionToken = sessionStorage.getItem('session_token');
-  const sessionRole = sessionStorage.getItem('session_role');
-  const overlay = document.getElementById('auth-overlay');
-  
-  if (sessionToken && sessionRole) {
-    // Already logged in
-    state.token = sessionToken;
-    state.role = sessionRole;
-    overlay.classList.add('hidden');
-    syncFromFirebase();
-    applyRoleRestrictions();
-  } else {
-    // Show login overlay
-    overlay.classList.remove('hidden');
-    document.getElementById('auth-loading-view').classList.remove('hidden');
-    
-    // Check if any shop exists to determine Setup vs Login
-    db.ref('shops').once('value').then(snapshot => {
-      document.getElementById('auth-loading-view').classList.add('hidden');
-      if (snapshot.exists()) {
-        // Show Login
-        document.getElementById('auth-title').textContent = 'Masuk Aplikasi';
-        document.getElementById('auth-login-view').classList.remove('hidden');
-        setLoginTab('bos');
-      } else {
-        // Show Setup
-        document.getElementById('auth-title').textContent = 'Atur Warung Baru';
-        document.getElementById('auth-setup-view').classList.remove('hidden');
-      }
-    }).catch(err => {
-      console.error(err);
-      alert("Gagal menghubungi server. Pastikan internet Anda jalan.");
-    });
-  }
-}
-
-function setLoginTab(role) {
-  if (role === 'bos') {
-    document.getElementById('tab-login-bos').style.borderColor = 'var(--accent-primary)';
-    document.getElementById('tab-login-bos').style.color = 'var(--accent-primary)';
-    document.getElementById('tab-login-karyawan').style.borderColor = 'var(--border)';
-    document.getElementById('tab-login-karyawan').style.color = 'var(--text-primary)';
-    document.getElementById('login-bos-form').classList.remove('hidden');
-    document.getElementById('login-karyawan-form').classList.add('hidden');
-  } else {
-    document.getElementById('tab-login-karyawan').style.borderColor = 'var(--accent-primary)';
-    document.getElementById('tab-login-karyawan').style.color = 'var(--accent-primary)';
-    document.getElementById('tab-login-bos').style.borderColor = 'var(--border)';
-    document.getElementById('tab-login-bos').style.color = 'var(--text-primary)';
-    document.getElementById('login-karyawan-form').classList.remove('hidden');
-    document.getElementById('login-bos-form').classList.add('hidden');
-  }
-}
-
-function submitSetup() {
-  const name = document.getElementById('setup-warung-name').value.trim();
-  const pin = document.getElementById('setup-bos-pin').value.trim();
-  
-  if (!name || !pin) { alert("Nama warung dan PIN wajib diisi!"); return; }
-  
-  const token = generateToken();
-  
-  // Save credentials to a separate secure path
-  db.ref('credentials/' + token).set({ pin: pin }).then(() => {
-    state.shopName = name;
-    state.token = token;
-    state.role = 'Bos';
-    
-    saveData(); // Save initial empty shop
-    
-    sessionStorage.setItem('session_token', token);
-    sessionStorage.setItem('session_role', 'Bos');
-    
-    document.getElementById('auth-overlay').classList.add('hidden');
-    syncFromFirebase();
-    applyRoleRestrictions();
-    alert("Berhasil! Token karyawan Anda adalah: " + token + "\\nSimpan token ini untuk diberikan ke karyawan.");
-  });
-}
-
-function submitLogin() {
-  const isBos = !document.getElementById('login-bos-form').classList.contains('hidden');
-  
-  if (isBos) {
-    const pin = document.getElementById('login-bos-pin').value.trim();
-    if (!pin) { alert("Masukkan PIN!"); return; }
-    
-    // Check all credentials for matching PIN
-    db.ref('credentials').once('value').then(snapshot => {
-      let foundToken = null;
-      snapshot.forEach(child => {
-        if (child.val().pin === pin) {
-          foundToken = child.key;
-        }
-      });
-      
-      if (foundToken) {
-        state.token = foundToken;
-        state.role = 'Bos';
-        sessionStorage.setItem('session_token', foundToken);
-        sessionStorage.setItem('session_role', 'Bos');
-        document.getElementById('auth-overlay').classList.add('hidden');
-        syncFromFirebase();
-        applyRoleRestrictions();
-      } else {
-        alert("PIN salah!");
-      }
-    });
-  } else {
-    const token = document.getElementById('login-karyawan-token').value.trim().toUpperCase();
-    if (!token) { alert("Masukkan Token!"); return; }
-    
-    db.ref('shops/' + token).once('value').then(snapshot => {
-      if (snapshot.exists()) {
-        state.token = token;
-        state.role = 'Karyawan';
-        sessionStorage.setItem('session_token', token);
-        sessionStorage.setItem('session_role', 'Karyawan');
-        document.getElementById('auth-overlay').classList.add('hidden');
-        syncFromFirebase();
-        applyRoleRestrictions();
-      } else {
-        alert("Token tidak ditemukan!");
-      }
-    });
-  }
-}
 
 function applyRoleRestrictions() {
   if (state.role === 'Karyawan') {
@@ -4410,8 +4324,23 @@ function saveExpense() {
 
 // --- Initialize ---
 function init() {
-  // Start the Auth / Firebase flow
-  checkAuth();
+  loadData();
+  
+  if (!state.isSetup) {
+    document.getElementById('welcome-overlay').classList.remove('hidden');
+    document.getElementById('app-container').classList.add('hidden');
+    const nameInput = document.getElementById('setup-shop-name');
+    if(nameInput) nameInput.value = state.shopName || '';
+    const tokenInput = document.getElementById('setup-token-bos');
+    if(tokenInput) tokenInput.value = state.token || '';
+  } else {
+    document.getElementById('welcome-overlay').classList.add('hidden');
+    document.getElementById('app-container').classList.remove('hidden');
+    const shopTitle = document.getElementById('shop-title-display');
+    if (shopTitle) shopTitle.textContent = state.shopName;
+    applyRoleRestrictions();
+    syncFromFirebase();
+  }
 
   updateDateDisplay();
   renderCategories();

@@ -2069,8 +2069,9 @@ body::before {
       
       <!-- For Karyawan: Enter Token -->
       <div class="form-group" id="setup-token-karyawan-group" style="margin-top: 18px; display: none;">
-        <label class="form-label">Masukkan Token Karyawan</label>
-        <input type="text" class="form-input" id="setup-token-karyawan" placeholder="Tanyakan token ke Bos Anda" style="text-align: center;">
+        <label class="form-label">Masukkan Kode Karyawan</label>
+        <input type="text" class="form-input" id="setup-token-karyawan" placeholder="Masukkan kode dari Bos Anda" style="text-align: center;">
+        <p class="form-hint" style="text-align: center; margin-top: 4px;">Masukkan kode akses yang diberikan oleh Bos Anda</p>
       </div>
       
       <button class="welcome-btn" onclick="saveSetup()">Mulai Aplikasi ➔</button>
@@ -3531,21 +3532,17 @@ function saveSetup() {
     state.token = tokenInput;
     state.isSetup = true;
   } else {
-    const enteredToken = document.getElementById('setup-token-karyawan').value.trim().toUpperCase();
+    const enteredToken = document.getElementById('setup-token-karyawan').value.trim();
     if (!enteredToken) {
       alert('Harap masukkan Token Karyawan!');
       return;
     }
     
-    const savedToken = (localStorage.getItem('kasir_token') || 'KASIR123').trim().toUpperCase();
-    const savedShopName = localStorage.getItem('kasir_shopName') || 'Kasir Warung';
-    
-    if (enteredToken !== savedToken) {
-      alert('Token Karyawan salah! Tanyakan pada Bos.');
-      return;
-    }
-    
-    state.shopName = savedShopName;
+    // Token diterima langsung sebagai identitas karyawan.
+    // Karena aplikasi ini tanpa server/database, token tidak bisa
+    // divalidasi antar perangkat. Pembatasan akses (Keuangan & Riwayat
+    // tersembunyi) adalah keamanan utamanya.
+    state.shopName = shopNameInput;
     state.role = 'Karyawan';
     state.token = enteredToken;
     state.isSetup = true;

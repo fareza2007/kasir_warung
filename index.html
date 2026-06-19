@@ -3629,7 +3629,7 @@ async function saveSetup() {
       }
     } catch (error) {
       console.error("Error checking token:", error);
-      alert('Gagal mengecek kode karyawan. Pastikan internet terhubung.');
+      alert('Gagal mengecek kode karyawan. Error: ' + error.message);
     }
   }
 }
